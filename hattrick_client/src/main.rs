@@ -1,8 +1,10 @@
 mod packets;
 
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::{Arc, LockResult, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
@@ -13,15 +15,19 @@ use crate::packets::packets::{ClientState, GameState};
 
 
 
-static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| {
-    GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0, client_list: Default::default() }
-});
+// static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| {
+//     GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0, client_list: Default::default() }
+// });
 
 
 #[macroquad::main("???")]
 async fn main() {
     println!("I am the client");
 
+    let mut game_state = Arc::new(Mutex::new(GameState::default()));
+
+
+    let connect_game_state = Arc::clone(&game_state);
     let connect_thread = thread::spawn(move || {
         let mut stream = TcpStream::connect("127.0.0.1:8111").unwrap();
         println!("connected");
@@ -45,10 +51,20 @@ async fn main() {
                 Ok(gs) => {
                     //println!("{:?}", gs.client_list);
 
-                    unsafe { *STATIC_GAME_STATE = gs.clone(); }
-
+                    //unsafe { *STATIC_GAME_STATE = gs.clone(); }
+                    match connect_game_state.lock().borrow_mut() {
+                        Ok(lock) => {
+                            lock.x = gs.x.clone();
+                            lock.y = gs.y.clone();
+                            lock.time = gs.time.clone();
+                            lock.client_list = gs.client_list.clone();
+                        }
+                        Err(e) => {
+                            println!("mutex guard error: {}",e);
+                        }
+                    }
                 }
-                Err(e) => {println!("failed to parse");}
+                Err(e) => {println!("failed to parse: {}", e);}
             };
             //println!("aquiring lock");
             // let mut lock = connect_game_state.lock().unwrap();
@@ -63,16 +79,19 @@ async fn main() {
 
     });
 
+    let game_game_state = Arc::clone(&game_state);
     loop {
         {
-            // let local_gs = game_state.lock().unwrap();
-            let local_gs = unsafe { STATIC_GAME_STATE.clone() };
+            let local_gs = {
+              game_game_state.lock().unwrap().clone()
+            };
+            // let local_gs = unsafe { STATIC_GAME_STATE.clone() };
             clear_background(WHITE);
 
             for client in local_gs.clone().client_list {
-                let clientState = client.1;
-                //println!("{} {}", clientState.mouse_pos.0, clientState.mouse_pos.1);
-                draw_circle(clientState.mouse_pos.0,clientState.mouse_pos.1,15.0,RED);
+                let client_state = client.1;
+                //println!("{} {}", client_state.mouse_pos.0, client_state.mouse_pos.1);
+                draw_circle(client_state.mouse_pos.0, client_state.mouse_pos.1, 15.0, RED);
 
             }
 
@@ -83,6 +102,9 @@ async fn main() {
             draw_text(format!("Server Time: {}", local_gs).as_str(), 50., 50., 12., BLACK);
         }
 
+        if is_key_pressed(KeyCode::Escape) {
+            break;
+        }
         // sleep(Duration::from_millis(500));
         frame_delay().await;
         next_frame().await;
