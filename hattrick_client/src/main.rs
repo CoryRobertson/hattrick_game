@@ -1,36 +1,39 @@
 mod packets;
 
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use macroquad::prelude::*;
+use once_cell::unsync::Lazy;
 
-use crate::packets::packets::GameState;
+use crate::packets::packets::{ClientState, GameState};
 
-type GameStateType = Arc<Mutex<GameState>>;
 
-static mut STATIC_GAME_STATE: GameState = GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0 };
+
+static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| {
+    GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0, client_list: Default::default() }
+});
+
 
 #[macroquad::main("???")]
 async fn main() {
     println!("I am the client");
 
-    let mut game_state = Arc::new(Mutex::new(GameState::default()));
-
-
-    let connect_game_state = Arc::clone(&game_state);
     let connect_thread = thread::spawn(move || {
         let mut stream = TcpStream::connect("127.0.0.1:8111").unwrap();
         println!("connected");
         loop {
             let mut buf: [u8 ; 512] = [0 ; 512];
 
+            let client_packet = ClientState{ time: SystemTime::now(), mouse_pos: mouse_position() };
+            let ser = serde_json::to_string(&client_packet).unwrap();
+
             let _ = stream.read(&mut buf);
-            let _ = stream.write(&[0]);
+            let _ = stream.write(ser.as_bytes());
+            let _ = stream.flush();
             let mut cleaned_buf = vec![];
             for value in buf { // make small buffer of the data into a vector sent by the server
                 if !String::from_utf8_lossy(&[value]).contains("\0") {
@@ -42,14 +45,15 @@ async fn main() {
             //println!("aquiring lock");
             // let mut lock = connect_game_state.lock().unwrap();
             // lock.time = deser.time;
-            unsafe { STATIC_GAME_STATE = deser; }
-            println!("time changed");
+
+            unsafe { *STATIC_GAME_STATE = deser.clone(); }
+            for client in deser.clone().client_list {
+                println!("{},{}",client.1.mouse_pos.0,client.1.mouse_pos.1);
+            }
 
         }
 
     });
-
-
 
     let mut count = 0;
     loop {
@@ -70,10 +74,8 @@ async fn main() {
         next_frame().await;
 
     }
-
-
+    let _ = connect_thread.join();
 }
-
 
 async fn frame_delay() {
     let minimum_frame_time = 1. / 60.;

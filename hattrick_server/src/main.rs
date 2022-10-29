@@ -1,24 +1,24 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use crate::packets::packets::GameState;
+use std::time::{SystemTime, UNIX_EPOCH};
+use once_cell::unsync::Lazy;
+use uuid::Uuid;
+use crate::packets::packets::{ClientState, GameState};
 
 mod packets;
 
-type GameStateType = Arc<Mutex<GameState>>;
+static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| {
+    GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0, client_list: Default::default() }
+});
 
-static mut STATIC_GAME_STATE: GameState = GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0 };
+
 
 fn main() {
     println!("I am the server!");
     let server = TcpListener::bind("127.0.0.1:8111").unwrap();
-    let mut game_state = Arc::new(Mutex::new(GameState::default()));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    let copied_game_state = Arc::clone(&game_state);
 
     let connect_thread = thread::spawn(move || {
 
@@ -37,54 +37,72 @@ fn main() {
 
             match response {
                 Ok(r) => {
-                    client_threads.push(handle_client(r,copied_game_state.clone()));
+                    client_threads.push(handle_client(r));
                 }
-                Err(e) => {}
+                Err(_) => {}
             }
             println!("Client count: {}", client_threads.len());
         }
 
     });
-    let copied_game_state = Arc::clone(&game_state);
 
-    let game_thread = thread::spawn(move || {
+    let game_thread =  spawn_game_thread();
+
+    let _ = connect_thread.join();
+    let _ = game_thread.join();
+}
+
+fn spawn_game_thread() -> JoinHandle<()> {
+    thread::spawn(|| {
 
         loop {
-            // let mut lock = copied_game_state.lock().unwrap();
-            // lock.time = SystemTime::now();
-            // lock.x = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().sin() * 100.0;
-            // lock.y = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().cos() * 100.0;
             unsafe {
                 STATIC_GAME_STATE.time = SystemTime::now();
                 STATIC_GAME_STATE.x = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().sin() * 100.0;
                 STATIC_GAME_STATE.y = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().cos() * 100.0;
             }
-            thread::sleep(Duration::from_millis(1));
         }
-    });
-
-    connect_thread.join();
-    game_thread.join();
+    })
 }
 
-fn handle_client(stream: TcpStream, game_state: GameStateType) -> JoinHandle<()> {
+fn handle_client(stream: TcpStream) -> JoinHandle<()> {
 
     thread::spawn(move || {
-        let state = game_state;
         let mut client_stream = stream;
+        let uuid = Uuid::new_v4().to_string();
+        unsafe { STATIC_GAME_STATE.client_list.insert(uuid.to_string(), ClientState { time: SystemTime::now(), mouse_pos: (0.0, 0.0) }); }
 
         loop {
-            println!("aquiring lock");
-            unsafe {
-            let ser = serde_json::to_string(&STATIC_GAME_STATE).unwrap();
+
+            let ser = unsafe { serde_json::to_string(&*STATIC_GAME_STATE).unwrap() };
             let write = client_stream.write(ser.as_bytes());
             let flush = client_stream.flush();
-            let read = client_stream.read(&mut [0; 128]);
-                if write.is_err() || flush.is_err() || read.is_err() {
-                    break;
+            let mut buf: [u8; 512] = [0; 512];
+            let read = client_stream.read(&mut buf);
+            let mut cleaned_buf = vec![];
+
+            for value in buf { // make small buffer of the data into a vector sent by the server
+                if !String::from_utf8_lossy(&[value]).contains("\0") {
+                    cleaned_buf.push(value);
                 }
-            } // drop the lock out of scope asap
-            thread::sleep(Duration::from_millis(1));
+            }
+
+            let clean = String::from_utf8(cleaned_buf).unwrap();
+            match serde_json::from_str::<ClientState>(&*clean) {
+                Ok(c) => {
+                    unsafe { STATIC_GAME_STATE.client_list.insert(uuid.to_string(),c.clone()) };
+
+                }
+                Err(e) => {
+                    println!("e: {}", e.to_string());
+                }
+            };
+
+
+            if write.is_err() || flush.is_err() || read.is_err() {
+                break;
+            }
+
         }
 
     })

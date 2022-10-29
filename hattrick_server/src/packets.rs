@@ -3,6 +3,7 @@ use std::time::SystemTime;
 use crate::packets::packets::GameState;
 
 pub mod packets {
+    use std::collections::HashMap;
     use std::time::SystemTime;
     use serde::{Deserialize, Serialize};
 
@@ -12,13 +13,15 @@ pub mod packets {
         pub time: SystemTime,
         pub x: f64,
         pub y: f64,
+        pub client_list: HashMap<String, ClientState>
 
     }
 
-
+    #[derive(Serialize,Deserialize,Debug,Clone)]
     pub struct ClientState {
 
         pub time: SystemTime,
+        pub mouse_pos: (f32, f32),
 
     }
 }
@@ -31,6 +34,6 @@ impl Display for GameState {
 
 impl Default for GameState {
     fn default() -> Self {
-        GameState{ time: SystemTime::now(), x: 0.0, y: 0.0 }
+        GameState{ time: SystemTime::now(), x: 0.0, y: 0.0, client_list: Default::default() }
     }
 }
