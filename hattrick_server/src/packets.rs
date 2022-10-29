@@ -6,10 +6,12 @@ pub mod packets {
     use std::time::SystemTime;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct GameState {
 
         pub time: SystemTime,
+        pub x: f64,
+        pub y: f64,
 
     }
 
@@ -29,6 +31,6 @@ impl Display for GameState {
 
 impl Default for GameState {
     fn default() -> Self {
-        GameState{ time: SystemTime::now() }
+        GameState{ time: SystemTime::now(), x: 0.0, y: 0.0 }
     }
 }

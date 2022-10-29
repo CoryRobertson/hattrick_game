@@ -6,14 +6,14 @@ use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use macroquad::prelude::*;
 
 use crate::packets::packets::GameState;
 
 type GameStateType = Arc<Mutex<GameState>>;
 
-static mut StaticGameState: GameState = GameState::default();
+static mut STATIC_GAME_STATE: GameState = GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0 };
 
 #[macroquad::main("???")]
 async fn main() {
@@ -40,9 +40,9 @@ async fn main() {
             let o = String::from_utf8(Vec::from(cleaned_buf)).unwrap();
             let deser: GameState = serde_json::from_str(&*o).unwrap();
             //println!("aquiring lock");
-            let mut lock = connect_game_state.lock().unwrap();
-            lock.time = deser.time;
-            // unsafe { StaticGameState = deser; }
+            // let mut lock = connect_game_state.lock().unwrap();
+            // lock.time = deser.time;
+            unsafe { STATIC_GAME_STATE = deser; }
             println!("time changed");
 
         }
@@ -54,9 +54,12 @@ async fn main() {
     let mut count = 0;
     loop {
         {
-            let local_gs = game_state.lock().unwrap();
+            // let local_gs = game_state.lock().unwrap();
+             let local_gs = unsafe { STATIC_GAME_STATE.clone() };
 
             clear_background(WHITE);
+
+            draw_circle(local_gs.x as f32 + 200.0, local_gs.y as f32 + 200.0, 15.0, RED);
 
             draw_text(format!("Server Time: {}, {}", local_gs, count).as_str(), 50., 50., 12., BLACK);
         }
