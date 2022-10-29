@@ -26,7 +26,7 @@ async fn main() {
         let mut stream = TcpStream::connect("127.0.0.1:8111").unwrap();
         println!("connected");
         loop {
-            let mut buf: [u8 ; 512] = [0 ; 512];
+            let mut buf: [u8 ; 4096] = [0 ; 4096];
 
             let client_packet = ClientState{ time: SystemTime::now(), mouse_pos: mouse_position() };
             let ser = serde_json::to_string(&client_packet).unwrap();
@@ -41,34 +41,48 @@ async fn main() {
                 }
             }
             let o = String::from_utf8(Vec::from(cleaned_buf)).unwrap();
-            let deser: GameState = serde_json::from_str(&*o).unwrap();
+            match serde_json::from_str::<GameState>(&*o) {
+                Ok(gs) => {
+                    //println!("{:?}", gs.client_list);
+
+                    unsafe { *STATIC_GAME_STATE = gs.clone(); }
+
+                }
+                Err(e) => {println!("failed to parse");}
+            };
             //println!("aquiring lock");
             // let mut lock = connect_game_state.lock().unwrap();
             // lock.time = deser.time;
 
-            unsafe { *STATIC_GAME_STATE = deser.clone(); }
-            for client in deser.clone().client_list {
-                println!("{},{}",client.1.mouse_pos.0,client.1.mouse_pos.1);
-            }
 
+            // for client in deser.clone().client_list {
+            //     println!("{},{}",client.1.mouse_pos.0,client.1.mouse_pos.1);
+            // }
+            let _ = stream.flush();
         }
 
     });
 
-    let mut count = 0;
     loop {
         {
             // let local_gs = game_state.lock().unwrap();
-             let local_gs = unsafe { STATIC_GAME_STATE.clone() };
-
+            let local_gs = unsafe { STATIC_GAME_STATE.clone() };
             clear_background(WHITE);
+
+            for client in local_gs.clone().client_list {
+                let clientState = client.1;
+                //println!("{} {}", clientState.mouse_pos.0, clientState.mouse_pos.1);
+                draw_circle(clientState.mouse_pos.0,clientState.mouse_pos.1,15.0,RED);
+
+            }
+
+            //println!("{:?}", mouse_position());
 
             draw_circle(local_gs.x as f32 + 200.0, local_gs.y as f32 + 200.0, 15.0, RED);
 
-            draw_text(format!("Server Time: {}, {}", local_gs, count).as_str(), 50., 50., 12., BLACK);
+            draw_text(format!("Server Time: {}", local_gs).as_str(), 50., 50., 12., BLACK);
         }
 
-        count += 1;
         // sleep(Duration::from_millis(500));
         frame_delay().await;
         next_frame().await;

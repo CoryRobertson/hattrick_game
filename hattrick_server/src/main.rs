@@ -77,7 +77,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             let ser = unsafe { serde_json::to_string(&*STATIC_GAME_STATE).unwrap() };
             let write = client_stream.write(ser.as_bytes());
             let flush = client_stream.flush();
-            let mut buf: [u8; 512] = [0; 512];
+            let mut buf: [u8; 4096] = [0; 4096];
             let read = client_stream.read(&mut buf);
             let mut cleaned_buf = vec![];
 
