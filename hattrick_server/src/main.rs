@@ -1,4 +1,4 @@
-use crate::packets::packets::{ClientState, GameState};
+use crate::packets::{ClientState, GameState};
 use once_cell::unsync::Lazy;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -35,12 +35,10 @@ fn main() {
                 }
             }
 
-            match response {
-                Ok(r) => {
-                    client_threads.push(handle_client(r));
-                }
-                Err(_) => {}
+            if let Ok(r) = response {
+                client_threads.push(handle_client(r));
             }
+
             println!("Client count: {}", client_threads.len());
         }
     });
@@ -98,13 +96,13 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
 
             for value in buf {
                 // make small buffer of the data into a vector sent by the server
-                if !String::from_utf8_lossy(&[value]).contains("\0") {
+                if !String::from_utf8_lossy(&[value]).contains('\0') {
                     cleaned_buf.push(value);
                 }
             }
 
             let clean = String::from_utf8(cleaned_buf).unwrap();
-            match serde_json::from_str::<ClientState>(&*clean) {
+            match serde_json::from_str::<ClientState>(&clean) {
                 Ok(c) => {
                     unsafe {
                         STATIC_GAME_STATE
@@ -113,7 +111,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     };
                 }
                 Err(e) => {
-                    println!("client disconnected: {}", e);
+                    println!("client disconnected: {e}");
                     unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
                     break;
                 }

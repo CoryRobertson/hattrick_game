@@ -1,6 +1,6 @@
 mod packets;
 
-use crate::packets::packets::{ClientState, GameState};
+use crate::packets::{ClientState, GameState};
 use macroquad::prelude::*;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -34,7 +34,7 @@ async fn main() {
             }
         };
         draw_text(
-            &*format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
+            &format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
             10.,
             10.,
             18.,
@@ -101,27 +101,27 @@ fn spawn_connect_thread(
             let mut cleaned_buf = vec![];
             for value in buf {
                 // make small buffer of the data into a vector sent by the server
-                if !String::from_utf8_lossy(&[value]).contains("\0") {
+                if !String::from_utf8_lossy(&[value]).contains('\0') {
                     cleaned_buf.push(value);
                 }
             }
-            let output_from_buf = String::from_utf8(Vec::from(cleaned_buf)).unwrap();
+            let output_from_buf = String::from_utf8(cleaned_buf).unwrap();
 
-            match serde_json::from_str::<GameState>(&*output_from_buf) {
+            match serde_json::from_str::<GameState>(&output_from_buf) {
                 Ok(gs) => match game_state.lock() {
                     Ok(mut lock) => {
                         *lock = gs.clone();
                     }
                     Err(e) => {
-                        println!("mutex guard error: {}", e);
+                        println!("mutex guard error: {e}");
                     }
                 },
                 Err(e) => {
-                    println!("failed to parse: {}", e);
+                    println!("failed to parse: {e}");
                 }
             };
 
-            if *running.lock().unwrap() == false {
+            if !(*running.lock().unwrap()) {
                 // if the thread running state has been instructed to stop, then we break out of the loop gracefully
                 break;
             }
