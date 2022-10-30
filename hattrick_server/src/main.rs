@@ -9,6 +9,7 @@ use crate::packets::packets::{ClientState, GameState};
 
 mod packets;
 
+// super bad practice to do this, probably move away from this eventually.
 static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| {
     GameState{ time: SystemTime::UNIX_EPOCH, x: 0.0, y: 0.0, client_list: Default::default() }
 });
@@ -57,6 +58,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
 
         loop {
             unsafe {
+                // basic game logic goes here
                 STATIC_GAME_STATE.time = SystemTime::now();
                 STATIC_GAME_STATE.x = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().sin() * 100.0;
                 STATIC_GAME_STATE.y = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().cos() * 100.0;
@@ -94,16 +96,22 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
 
                 }
                 Err(e) => {
-                    println!("e: {}", e.to_string());
+                    println!("client disconnected: {}", e);
+                    unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
+                    break;
                 }
             };
 
 
             if write.is_err() || flush.is_err() || read.is_err() {
+
+                println!("client disconnected: Socket closed");
+                unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
                 break;
             }
 
         }
+
 
     })
 }
