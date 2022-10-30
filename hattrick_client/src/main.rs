@@ -8,6 +8,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
+use macroquad::ui::root_ui;
+
+enum LocalState {
+    AwaitingIp,
+    Playing,
+}
 
 #[macroquad::main("???")]
 async fn main() {
@@ -15,70 +21,102 @@ async fn main() {
 
     let game_state = Arc::new(Mutex::new(GameState::default()));
     let running_thread_state = Arc::new(Mutex::new(true));
-    let connect_thread = spawn_connect_thread(game_state.clone(), running_thread_state.clone());
+    let mut connect_thread = None;
+    let mut local_state = LocalState::AwaitingIp;
+    let mut ip = String::new();
+
 
     loop {
-        clear_background(WHITE);
+        // check game state to decide what we are doing
+        match local_state {
+            LocalState::AwaitingIp => {
+                clear_background(Color{
+                    r: 80.0/255.0,
+                    g: 80.0/255.0,
+                    b: 80.0/255.0,
+                    a: 1.0
+                });
 
-        // get the new game state that was most recently received from the connection thread
-        let local_gs = { game_state.lock().unwrap().clone() };
+                root_ui().label(None,"IP Address");
+                root_ui().input_text(0,"",&mut ip);
+                if root_ui().button(None,"Connect") {
+                    connect_thread = Some(spawn_connect_thread(game_state.clone(), running_thread_state.clone(),ip.clone()));
+                    local_state = LocalState::Playing;
+                }
 
-        let ping = SystemTime::now()
-            .duration_since(local_gs.clone().time)
-            .unwrap();
-        let ping_color = {
-            if ping.as_millis() > 16 {
-                RED
-            } else {
-                GREEN
+                #[cfg(debug_assertions)]
+                root_ui().label(None,format!("{},{}", mouse_position().0,mouse_position().1).as_str());
+
+                frame_delay().await;
+                next_frame().await;
             }
-        };
-        draw_text(
-            &format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
-            10.,
-            10.,
-            18.,
-            ping_color,
-        );
+            LocalState::Playing => {
+                clear_background(WHITE);
 
-        // render each client from their client state
-        for client in local_gs.clone().client_list {
-            let client_state = client.1;
-            draw_circle(
-                client_state.mouse_pos.0,
-                client_state.mouse_pos.1,
-                15.0,
-                RED,
-            );
+                // get the new game state that was most recently received from the connection thread
+                let local_gs = { game_state.lock().unwrap().clone() };
+
+                let ping = SystemTime::now()
+                    .duration_since(local_gs.clone().time)
+                    .unwrap();
+                let ping_color = {
+                    if ping.as_millis() > 16 {
+                        RED
+                    } else {
+                        GREEN
+                    }
+                };
+                draw_text(
+                    &format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
+                    10.,
+                    10.,
+                    18.,
+                    ping_color,
+                );
+
+                // render each client from their client state
+                for client in local_gs.clone().client_list {
+                    let client_state = client.1;
+                    draw_circle(
+                        client_state.mouse_pos.0,
+                        client_state.mouse_pos.1,
+                        15.0,
+                        RED,
+                    );
+                }
+
+                draw_circle(
+                    local_gs.x as f32 + 200.0,
+                    local_gs.y as f32 + 200.0,
+                    15.0,
+                    RED,
+                );
+
+                if is_key_pressed(KeyCode::Escape) {
+                    let mut end = running_thread_state.lock().unwrap();
+                    *end = false;
+                    println!("disconnected from connection thread");
+                    break;
+                }
+
+                frame_delay().await;
+                next_frame().await;
+            }
         }
-
-        draw_circle(
-            local_gs.x as f32 + 200.0,
-            local_gs.y as f32 + 200.0,
-            15.0,
-            RED,
-        );
-
-        if is_key_pressed(KeyCode::Escape) {
-            let mut end = running_thread_state.lock().unwrap();
-            *end = false;
-            println!("disconnected from connection thread");
-            break;
-        }
-
-        frame_delay().await;
-        next_frame().await;
     }
 
-    let _ = connect_thread.join();
+    if let Some(t) = connect_thread {
+        let _ = t.join();
+    }
 }
 
 fn spawn_connect_thread(
     game_state: Arc<Mutex<GameState>>,
     running: Arc<Mutex<bool>>,
+    ip_address: String,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut stream = TcpStream::connect("127.0.0.1:8111").unwrap();
+        let mut stream = TcpStream::connect(ip_address).unwrap();
         println!("connected");
         loop {
             let mut buf: [u8; 4096] = [0; 4096];

@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 mod packets;
+//TODO: write a game_sub_state module that contains which game is being played, then have it transition from two different states that the client will render. Use an enum
 
 // super bad practice to do this, probably move away from this eventually.
 static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
@@ -19,7 +20,7 @@ static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
 
 fn main() {
     println!("I am the server!");
-    let server = TcpListener::bind("127.0.0.1:8111").unwrap();
+    let server = TcpListener::bind("0.0.0.0:8111").unwrap();
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
 
     let connect_thread = thread::spawn(move || {
