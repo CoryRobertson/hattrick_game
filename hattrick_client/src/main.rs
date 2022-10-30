@@ -13,6 +13,7 @@ use macroquad::ui::root_ui;
 enum LocalState {
     AwaitingIp,
     Playing,
+    LostConnection,
 }
 
 #[macroquad::main("???")]
@@ -29,6 +30,23 @@ async fn main() {
     loop {
         // check game state to decide what we are doing
         match local_state {
+
+            LocalState::LostConnection => {
+                clear_background(WHITE);
+                draw_text("Error, lost connection to host", screen_width() / 2.0, screen_height() / 2.0,20.0, RED);
+                if root_ui().button(None,"Reconnect?") {
+                    let mut lock = running_thread_state.lock().unwrap();
+                    *lock = true;
+                    connect_thread = Some(spawn_connect_thread(game_state.clone(), running_thread_state.clone(),ip.clone()));
+                    local_state = LocalState::Playing;
+                }
+                if root_ui().button(None,"Back to main menu") {
+                    local_state = LocalState::AwaitingIp;
+                }
+                frame_delay().await;
+                next_frame().await;
+            }
+
             LocalState::AwaitingIp => {
                 clear_background(Color{
                     r: 80.0/255.0,
@@ -50,6 +68,7 @@ async fn main() {
                 frame_delay().await;
                 next_frame().await;
             }
+
             LocalState::Playing => {
                 clear_background(WHITE);
 
@@ -66,14 +85,15 @@ async fn main() {
                         GREEN
                     }
                 };
-                draw_text(
-                    &format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
-                    10.,
-                    10.,
-                    18.,
-                    ping_color,
-                );
-
+                if *running_thread_state.lock().unwrap() {
+                    draw_text(
+                        &format!("Ping: {:.2}ms", ping.as_secs_f64() * 1000.0),
+                        10.,
+                        10.,
+                        18.,
+                        ping_color,
+                    );
+                } else { local_state = LocalState::LostConnection; }
                 // render each client from their client state
                 for client in local_gs.clone().client_list {
                     let client_state = client.1;
@@ -99,8 +119,26 @@ async fn main() {
                     break;
                 }
 
+
+
                 frame_delay().await;
                 next_frame().await;
+            }
+
+        }
+
+        #[cfg(debug_assertions)] // debug keys
+        {
+            if is_key_pressed(KeyCode::F1) {
+                local_state = LocalState::AwaitingIp;
+            }
+
+            if is_key_pressed(KeyCode::F2) {
+                local_state = LocalState::Playing;
+            }
+
+            if is_key_pressed(KeyCode::F3) {
+                local_state = LocalState::LostConnection;
             }
         }
     }
@@ -117,6 +155,8 @@ fn spawn_connect_thread(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut stream = TcpStream::connect(ip_address).unwrap();
+        let _ = stream.set_read_timeout(Option::from(Duration::from_secs(5)));
+        let _ = stream.set_write_timeout(Option::from(Duration::from_secs(5)));
         println!("connected");
         loop {
             let mut buf: [u8; 4096] = [0; 4096];
@@ -128,6 +168,7 @@ fn spawn_connect_thread(
             let ser = serde_json::to_string(&client_packet).unwrap();
 
             let read = stream.read(&mut buf);
+
             let write = stream.write(ser.as_bytes());
             let flush = stream.flush();
 
@@ -164,6 +205,7 @@ fn spawn_connect_thread(
                 break;
             }
         }
+        *running.lock().unwrap() = false;
         println!("connection thread finished");
     })
 }
