@@ -1,14 +1,12 @@
-mod packets;
-
-use crate::packets::{ClientState, GameState};
+use hattrick_packets_lib::packets::*;
 use macroquad::prelude::*;
+use macroquad::ui::root_ui;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
-use macroquad::ui::root_ui;
 
 enum LocalState {
     AwaitingIp,
@@ -26,21 +24,29 @@ async fn main() {
     let mut local_state = LocalState::AwaitingIp;
     let mut ip = String::new();
 
-
     loop {
         // check game state to decide what we are doing
         match local_state {
-
             LocalState::LostConnection => {
                 clear_background(WHITE);
-                draw_text("Error, lost connection to host", screen_width() / 2.0, screen_height() / 2.0,20.0, RED);
-                if root_ui().button(None,"Reconnect?") {
+                draw_text(
+                    "Error, lost connection to host",
+                    screen_width() / 2.0,
+                    screen_height() / 2.0,
+                    20.0,
+                    RED,
+                );
+                if root_ui().button(None, "Reconnect?") {
                     let mut lock = running_thread_state.lock().unwrap();
                     *lock = true;
-                    connect_thread = Some(spawn_connect_thread(game_state.clone(), running_thread_state.clone(),ip.clone()));
+                    connect_thread = Some(spawn_connect_thread(
+                        game_state.clone(),
+                        running_thread_state.clone(),
+                        ip.clone(),
+                    ));
                     local_state = LocalState::Playing;
                 }
-                if root_ui().button(None,"Back to main menu") {
+                if root_ui().button(None, "Back to main menu") {
                     local_state = LocalState::AwaitingIp;
                 }
                 frame_delay().await;
@@ -48,22 +54,29 @@ async fn main() {
             }
 
             LocalState::AwaitingIp => {
-                clear_background(Color{
-                    r: 80.0/255.0,
-                    g: 80.0/255.0,
-                    b: 80.0/255.0,
-                    a: 1.0
+                clear_background(Color {
+                    r: 80.0 / 255.0,
+                    g: 80.0 / 255.0,
+                    b: 80.0 / 255.0,
+                    a: 1.0,
                 });
 
-                root_ui().label(None,"IP Address");
-                root_ui().input_text(0,"",&mut ip);
-                if root_ui().button(None,"Connect") {
-                    connect_thread = Some(spawn_connect_thread(game_state.clone(), running_thread_state.clone(),ip.clone()));
+                root_ui().label(None, "IP Address");
+                root_ui().input_text(0, "", &mut ip);
+                if root_ui().button(None, "Connect") {
+                    connect_thread = Some(spawn_connect_thread(
+                        game_state.clone(),
+                        running_thread_state.clone(),
+                        ip.clone(),
+                    ));
                     local_state = LocalState::Playing;
                 }
 
                 #[cfg(debug_assertions)]
-                root_ui().label(None,format!("{},{}", mouse_position().0,mouse_position().1).as_str());
+                root_ui().label(
+                    None,
+                    format!("{},{}", mouse_position().0, mouse_position().1).as_str(),
+                );
 
                 frame_delay().await;
                 next_frame().await;
@@ -93,7 +106,9 @@ async fn main() {
                         18.,
                         ping_color,
                     );
-                } else { local_state = LocalState::LostConnection; }
+                } else {
+                    local_state = LocalState::LostConnection;
+                }
                 // render each client from their client state
                 for client in local_gs.clone().client_list {
                     let client_state = client.1;
@@ -119,12 +134,9 @@ async fn main() {
                     break;
                 }
 
-
-
                 frame_delay().await;
                 next_frame().await;
             }
-
         }
 
         #[cfg(debug_assertions)] // debug keys

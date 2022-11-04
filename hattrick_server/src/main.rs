@@ -1,16 +1,17 @@
-use crate::packets::{ClientState, GameState};
+use hattrick_packets_lib::packets::*;
 use once_cell::unsync::Lazy;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-mod packets;
 //TODO: write a game_sub_state module that contains which game is being played, then have it transition from two different states that the client will render. Use an enum
 
 // super bad practice to do this, probably move away from this eventually.
+// if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
+// following this, we could use a function that detects how different the client state is from the current ClientState and only update it if the difference is high enough.
 static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
     time: SystemTime::UNIX_EPOCH,
     x: 0.0,
@@ -76,6 +77,12 @@ fn spawn_game_thread() -> JoinHandle<()> {
 fn handle_client(stream: TcpStream) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut client_stream = stream;
+        client_stream
+            .set_write_timeout(Option::from(Duration::from_secs(5)))
+            .unwrap();
+        client_stream
+            .set_read_timeout(Option::from(Duration::from_secs(5)))
+            .unwrap();
         let uuid = Uuid::new_v4().to_string();
         unsafe {
             STATIC_GAME_STATE.client_list.insert(
@@ -105,6 +112,9 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             let clean = String::from_utf8(cleaned_buf).unwrap();
             match serde_json::from_str::<ClientState>(&clean) {
                 Ok(c) => {
+                    // here we can decide if we want to do anything with the client state given if it is different enough,
+                    // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
+
                     unsafe {
                         STATIC_GAME_STATE
                             .client_list

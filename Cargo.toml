@@ -2,6 +2,7 @@
 members = [
 "hattrick_client",
 "hattrick_server",
+"hattrick_packets_lib",
 ]
 
 [profile.dev]
