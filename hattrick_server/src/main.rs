@@ -5,10 +5,9 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, SystemTime};
+use rand::Rng;
 use uuid::Uuid;
 use hattrick_packets_lib::packets::GameType::PONG;
-
-//TODO: write a game_sub_state module that contains which game is being played, then have it transition from two different states that the client will render. Use an enum
 
 // super bad practice to do this, probably move away from this eventually.
 // if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
@@ -20,6 +19,7 @@ static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
     game_type: PONG(PongGameState::default()),
     client_list: Default::default(),
 });
+static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
 
 fn main() {
     println!("I am the server!");
@@ -55,80 +55,108 @@ fn main() {
 
 fn spawn_game_thread() -> JoinHandle<()> {
     thread::spawn(|| {
+        let mut previous_time = SystemTime::now();
         loop {
+
             let copy_gs = unsafe { STATIC_GAME_STATE.clone() };
-            //println!("client list len: {}", copy_gs.client_list.len());
+            let difference = {
+                let d = SystemTime::now().duration_since(previous_time).unwrap().as_secs_f64() as f32;
+                if d > 1.0 {
+                    16.0 / 1000.0
+                } else {
+                    d
+                }
+            }; // difference in time between last game thread loop, useful to making things non-frame rate dependent on the server side.
+
             if copy_gs.client_list.len() >= 1 {
-                unsafe {
-                    // basic game logic goes here
-                    STATIC_GAME_STATE.time = SystemTime::now();
-                    match copy_gs.game_type {
-                        PONG(mut gs) => {
-                            let ball_radius = hattrick_packets_lib::PONG_BALL_RADIUS;
+                // basic game logic goes here
+                match copy_gs.game_type {
+                    PONG(mut gs) => {
+                        let ball_radius = hattrick_packets_lib::PONG_BALL_RADIUS;
 
-                            // blue team top of screen, red team bottom
-                            // ball physics
-                            gs.ball_x += gs.ball_xvel;
-                            gs.ball_y += gs.ball_yvel;
+                        // blue team top of screen, red team bottom
+                        // ball physics multiplied by delta time since last "frame" allows us to run game speed  independent of application run speed.
+                        gs.ball_x += (gs.ball_xvel * difference) * 16.0; // magic number multiplier
+                        gs.ball_y += (gs.ball_yvel * difference) * 16.0;
+                        // println!("diff: {}", difference);
 
-                            {
-                                if gs.ball_x < 0.0 + ball_radius { // left screen wall
-                                    gs.ball_xvel *= -1.0;
+                        {
+                            if gs.ball_x < 0.0 + ball_radius { // left screen wall
+                                gs.ball_xvel *= -1.0;
+                            }
+
+                            if gs.ball_x > 800.0 - ball_radius { // right screen wall
+                                gs.ball_xvel *= -1.0;
+                            }
+
+                            if gs.ball_y > 600.0 - ball_radius { // ball hits bottom screen wall
+                                let default_xvel = PongGameState::default().ball_xvel;
+                                let default_yvel = PongGameState::default().ball_yvel;
+                                gs.ball_xvel = {
+                                    if gs.ball_xvel < 0.0 { -default_xvel } else { default_xvel }
+                                };
+                                gs.ball_yvel = -default_yvel;
+                                gs.blue_points += 1;
+                            }
+
+                            if gs.ball_y < 0.0 + ball_radius { // ball hits top screen wall
+                                let default_xvel = PongGameState::default().ball_xvel;
+                                let default_yvel = PongGameState::default().ball_yvel;
+                                gs.ball_xvel = {
+                                    if gs.ball_xvel < 0.0 { -default_xvel } else { default_xvel }
+                                };
+                                gs.ball_yvel = default_yvel;
+                                gs.red_points += 1;
+                            }
+                        } // bounce checks for ball on walls
+
+                        for client in &copy_gs.client_list {
+                            let cs = client.1;
+
+                            let cx = cs.mouse_pos.0; // client x
+                            let cy = {
+                                if cs.team_id == 0 {
+                                    cs.mouse_pos.1 + ball_radius
+                                } else {
+                                    cs.mouse_pos.1 - ball_radius
                                 }
+                            }; // client y after taking into account the ball radius, cheap way to do it i know :)
+                            let cw = hattrick_packets_lib::PONG_PADDLE_WIDTH; // client width
+                            let ch = hattrick_packets_lib::PONG_PADDLE_HEIGHT; // client height
 
-                                if gs.ball_x > 800.0 - ball_radius { // right screen wall
-                                    gs.ball_xvel *= -1.0;
-                                }
+                            if gs.ball_y > cy && gs.ball_y < cy + ch {
+                                if gs.ball_x > cx && gs.ball_x < cx + cw {
 
-                                if gs.ball_y > 600.0 - ball_radius { // ball hits bottom screen wall
+                                    gs.ball_yvel *= -1.0;
+                                    let rand_xvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0);
+                                    let rand_yvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0);
 
-                                    gs.ball_xvel = {
-                                        if gs.ball_xvel < 0.0 { -5.0 } else { 5.0 }
-                                    };
-                                    gs.ball_yvel = -5.0;
-                                    gs.blue_points += 1;
-                                }
-
-                                if gs.ball_y < 0.0 + ball_radius { // ball hits top screen wall
-
-                                    gs.ball_xvel = {
-                                        if gs.ball_xvel < 0.0 { -5.0 } else { 5.0 }
-                                    };
-                                    gs.ball_yvel = 5.0;
-                                    gs.red_points += 1;
-                                }
-                            } // bounce checks for ball on walls
-
-
-                            for client in &copy_gs.client_list {
-                                let cs = client.1;
-
-                                let cx = cs.mouse_pos.0; // client x
-                                let cy = {
-                                    if cs.team_id == 0 {
-                                        cs.mouse_pos.1 + ball_radius
+                                    if gs.ball_xvel > 0.0 {
+                                        gs.ball_xvel += rand_xvel_change;
                                     } else {
-                                        cs.mouse_pos.1 - ball_radius
+                                        gs.ball_xvel -= rand_xvel_change;
                                     }
-                                }; // client y after taking into account the ball radius, cheap way to do it i know :)
-                                let cw = hattrick_packets_lib::PONG_PADDLE_WIDTH; // client width
-                                let ch = hattrick_packets_lib::PONG_PADDLE_HEIGHT; // client height
 
-                                if gs.ball_y > cy && gs.ball_y < cy + ch {
-                                    if gs.ball_x > cx && gs.ball_x < cx + cw {
-                                        gs.ball_yvel *= -1.0;
-                                        if gs.ball_xvel > 0.0 { gs.ball_xvel += 1.0; } else { gs.ball_xvel -= 1.0; }
-                                        if gs.ball_yvel > 0.0 { gs.ball_yvel += 1.0; } else { gs.ball_yvel -= 1.0; }
-                                        println!("bounced with new vel: {} {}", gs.ball_xvel, gs.ball_yvel);
+                                    if gs.ball_yvel > 0.0 {
+                                        gs.ball_yvel += rand_yvel_change;
+                                    } else {
+                                        gs.ball_yvel -= rand_yvel_change;
                                     }
-                                } // bounce checks for ball on paddles of clients
-                            } // client loop for game state
-                            STATIC_GAME_STATE.game_type = PONG(gs.clone());
+
+                                    println!("bounced with: new xvel ({}), new yvel ({}): {} {}",rand_xvel_change,rand_yvel_change, gs.ball_xvel, gs.ball_yvel);
+                                }
+                            } // bounce checks for ball on paddles of clients
+                        } // client loop for game state
+                        unsafe {
+                            STATIC_GAME_STATE.game_type = PONG(gs);
+                            STATIC_GAME_STATE.time = SystemTime::now();
                         }
+                        previous_time = SystemTime::now();
                     }
+
                 }
             }
-            sleep(Duration::from_millis(16)); // maybe remove this? at the moment unsure
+            sleep(Duration::from_millis(GAME_LOOP_THREAD_DELAY_MS)); // maybe remove this? at the moment unsure
         }
     })
 }

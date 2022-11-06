@@ -31,11 +31,7 @@ async fn main() {
 
     loop {
 
-        #[cfg(debug_assertions)]
-        root_ui().label(
-            None,
-            format!("DEBUG MOUSEPOS: {},{}", mouse_position().0, mouse_position().1).as_str(),
-        );
+
 
         match local_state { // check game state to decide what we are doing
 
@@ -70,6 +66,9 @@ async fn main() {
             LocalState::Playing => {
                 clear_background(WHITE);
 
+                #[cfg(debug_assertions)]
+                draw_text(format!("DEBUG MOUSEPOS: {},{}", mouse_position().0, mouse_position().1).as_str(),10.0,30.0,18.0,BLACK);
+
                 // get the new game state that was most recently received from the connection thread
                 let local_gs = { game_state.lock().unwrap().clone() };
 
@@ -77,7 +76,7 @@ async fn main() {
                 {
                     let ping = SystemTime::now()
                         .duration_since(local_gs.clone().time)
-                        .unwrap();
+                        .unwrap(); // time from last game state to now, including game framerate added, making this number rather high on average.
                     let ping_color = {
                         if ping.as_millis() > 16 {
                             RED
@@ -117,7 +116,7 @@ async fn main() {
                         }
                         // draw the ball from the servers data
                         draw_circle(pgs.ball_x,pgs.ball_y,hattrick_packets_lib::PONG_BALL_RADIUS,BLACK);
-                        println!("BALL CORDS: {},{}", pgs.ball_x,pgs.ball_y);
+                        // println!("BALL CORDS: {},{}", pgs.ball_x,pgs.ball_y);
                         draw_text(
                             format!("Blue points: {}, Red points: {}", pgs.blue_points,pgs.red_points).as_str(),
                             10.0,20.0,18.0,BLACK
@@ -162,7 +161,7 @@ async fn main() {
             *end = false;
             println!("disconnected from connection thread");
             break;
-        }
+        } // program exit key
 
         #[cfg(debug_assertions)] // debug keys
         {
@@ -180,6 +179,7 @@ async fn main() {
         }
     }
 
+    // make sure connection thread is joined before exiting main
     if let Some(t) = connect_thread {
         let _ = t.join();
     }
