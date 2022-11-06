@@ -3,9 +3,10 @@ use once_cell::unsync::Lazy;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
-use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::thread::{JoinHandle, sleep};
+use std::time::{Duration, SystemTime};
 use uuid::Uuid;
+use hattrick_packets_lib::packets::GameType::PONG;
 
 //TODO: write a game_sub_state module that contains which game is being played, then have it transition from two different states that the client will render. Use an enum
 
@@ -14,8 +15,9 @@ use uuid::Uuid;
 // following this, we could use a function that detects how different the client state is from the current ClientState and only update it if the difference is high enough.
 static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
     time: SystemTime::UNIX_EPOCH,
-    x: 0.0,
-    y: 0.0,
+    // x: 0.0,
+    // y: 0.0,
+    game_type: PONG(PongGameState::default()),
     client_list: Default::default(),
 });
 
@@ -54,22 +56,79 @@ fn main() {
 fn spawn_game_thread() -> JoinHandle<()> {
     thread::spawn(|| {
         loop {
-            unsafe {
-                // basic game logic goes here
-                STATIC_GAME_STATE.time = SystemTime::now();
-                STATIC_GAME_STATE.x = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs_f64()
-                    .sin()
-                    * 100.0;
-                STATIC_GAME_STATE.y = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs_f64()
-                    .cos()
-                    * 100.0;
+            let copy_gs = unsafe { STATIC_GAME_STATE.clone() };
+            //println!("client list len: {}", copy_gs.client_list.len());
+            if copy_gs.client_list.len() >= 1 {
+                unsafe {
+                    // basic game logic goes here
+                    STATIC_GAME_STATE.time = SystemTime::now();
+                    match copy_gs.game_type {
+                        PONG(mut gs) => {
+                            let ball_radius = hattrick_packets_lib::PONG_BALL_RADIUS;
+
+                            // blue team top of screen, red team bottom
+                            // ball physics
+                            gs.ball_x += gs.ball_xvel;
+                            gs.ball_y += gs.ball_yvel;
+
+                            {
+                                if gs.ball_x < 0.0 + ball_radius { // left screen wall
+                                    gs.ball_xvel *= -1.0;
+                                }
+
+                                if gs.ball_x > 800.0 - ball_radius { // right screen wall
+                                    gs.ball_xvel *= -1.0;
+                                }
+
+                                if gs.ball_y > 600.0 - ball_radius { // ball hits bottom screen wall
+
+                                    gs.ball_xvel = {
+                                        if gs.ball_xvel < 0.0 { -5.0 } else { 5.0 }
+                                    };
+                                    gs.ball_yvel = -5.0;
+                                    gs.blue_points += 1;
+                                }
+
+                                if gs.ball_y < 0.0 + ball_radius { // ball hits top screen wall
+
+                                    gs.ball_xvel = {
+                                        if gs.ball_xvel < 0.0 { -5.0 } else { 5.0 }
+                                    };
+                                    gs.ball_yvel = 5.0;
+                                    gs.red_points += 1;
+                                }
+                            } // bounce checks for ball on walls
+
+
+                            for client in &copy_gs.client_list {
+                                let cs = client.1;
+
+                                let cx = cs.mouse_pos.0; // client x
+                                let cy = {
+                                    if cs.team_id == 0 {
+                                        cs.mouse_pos.1 + ball_radius
+                                    } else {
+                                        cs.mouse_pos.1 - ball_radius
+                                    }
+                                }; // client y after taking into account the ball radius, cheap way to do it i know :)
+                                let cw = hattrick_packets_lib::PONG_PADDLE_WIDTH; // client width
+                                let ch = hattrick_packets_lib::PONG_PADDLE_HEIGHT; // client height
+
+                                if gs.ball_y > cy && gs.ball_y < cy + ch {
+                                    if gs.ball_x > cx && gs.ball_x < cx + cw {
+                                        gs.ball_yvel *= -1.0;
+                                        if gs.ball_xvel > 0.0 { gs.ball_xvel += 1.0; } else { gs.ball_xvel -= 1.0; }
+                                        if gs.ball_yvel > 0.0 { gs.ball_yvel += 1.0; } else { gs.ball_yvel -= 1.0; }
+                                        println!("bounced with new vel: {} {}", gs.ball_xvel, gs.ball_yvel);
+                                    }
+                                } // bounce checks for ball on paddles of clients
+                            } // client loop for game state
+                            STATIC_GAME_STATE.game_type = PONG(gs.clone());
+                        }
+                    }
+                }
             }
+            sleep(Duration::from_millis(16)); // maybe remove this? at the moment unsure
         }
     })
 }
@@ -90,6 +149,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                 ClientState {
                     time: SystemTime::now(),
                     mouse_pos: (0.0, 0.0),
+                    team_id: 0
                 },
             );
         }
@@ -111,9 +171,18 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
 
             let clean = String::from_utf8(cleaned_buf).unwrap();
             match serde_json::from_str::<ClientState>(&clean) {
-                Ok(c) => {
+                Ok(mut c) => {
                     // here we can decide if we want to do anything with the client state given if it is different enough,
                     // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
+                    let client_x = {
+                        if c.team_id == 0 {
+                            10.0
+                        } else {
+                            550.0
+                        }
+                    };
+
+                    c.mouse_pos.1 = client_x;
 
                     unsafe {
                         STATIC_GAME_STATE
@@ -135,4 +204,10 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             }
         }
     })
+}
+
+fn _distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let g1 = (x2-x1).powi(2);
+    let g2 = (y2-y1).powi(2);
+    return (g1 + g2).sqrt();
 }
