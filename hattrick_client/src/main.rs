@@ -1,3 +1,4 @@
+use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::packets::*;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
@@ -7,14 +8,14 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
-use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
-
 
 enum LocalState {
     AwaitingIp,
     Playing,
     LostConnection,
 }
+
+// IDEA: potentially move the server code into a library, and let the client spawn a server hosting thread to host from their client??
 
 #[macroquad::main("???")]
 async fn main() {
@@ -24,16 +25,18 @@ async fn main() {
     let running_thread_state = Arc::new(Mutex::new(true));
     let mut connect_thread = None;
     let mut local_state = LocalState::AwaitingIp;
-    let mut ip = String::new();
+    let mut _ip = String::new();
     #[cfg(debug_assertions)]
     {
-        ip = "localhost:8111".to_string();
+        _ip = "localhost:8111".to_string();
     }
     let mut team_id = BlueTeam; // BLUE = 0, RED = 1
 
     loop {
-        match local_state { // check game state to decide what we are doing
+        // check game state to decide what we are doing
+        match local_state {
 
+            // state for when the player is at the main menu and we are waiting for them to type in an ip address.
             LocalState::AwaitingIp => {
                 clear_background(Color {
                     r: 80.0 / 255.0,
@@ -43,31 +46,45 @@ async fn main() {
                 });
 
                 #[cfg(debug_assertions)]
-                draw_text(format!("DEBUG MOUSEPOS: {},{}", mouse_position().0, mouse_position().1).as_str(),10.0,300.0,18.0,BLACK);
+                draw_text(
+                    format!(
+                        "DEBUG MOUSEPOS: {},{}",
+                        mouse_position().0,
+                        mouse_position().1
+                    )
+                    .as_str(),
+                    10.0,
+                    300.0,
+                    18.0,
+                    BLACK,
+                );
 
                 root_ui().label(None, "IP Address");
-                root_ui().input_text(0, "", &mut ip);
+                root_ui().input_text(0, "", &mut _ip);
 
-                if root_ui().button(None,"Blue Team") {team_id = BlueTeam;}
-                if root_ui().button(None,"Red Team") {team_id = RedTeam;}
+                if root_ui().button(None, "Blue Team") {
+                    team_id = BlueTeam;
+                }
+                if root_ui().button(None, "Red Team") {
+                    team_id = RedTeam;
+                }
 
                 let team_color = {
                     match &team_id {
-                        BlueTeam => {BLUE}
-                        RedTeam => {RED}
-                        //_ => {GRAY}
+                        BlueTeam => BLUE,
+                        RedTeam => RED, //_ => {GRAY}
                     }
                 };
 
                 // draw_text("Team Color")
-                root_ui().label(None,"Team: ");
-                draw_rectangle(40.0,85.0,10.0,10.0,team_color);
+                root_ui().label(None, "Team: ");
+                draw_rectangle(40.0, 85.0, 10.0, 10.0, team_color);
 
                 if root_ui().button(None, "Connect") {
                     connect_thread = Some(spawn_connect_thread(
                         game_state.clone(),
                         running_thread_state.clone(),
-                        ip.clone(),
+                        _ip.clone(),
                         team_id.clone(),
                     ));
                     local_state = LocalState::Playing;
@@ -77,11 +94,23 @@ async fn main() {
                 next_frame().await;
             }
 
+            // state for when a game is being played.
             LocalState::Playing => {
                 clear_background(WHITE);
 
                 #[cfg(debug_assertions)]
-                draw_text(format!("DEBUG MOUSEPOS: {},{}", mouse_position().0, mouse_position().1).as_str(),10.0,30.0,18.0,BLACK);
+                draw_text(
+                    format!(
+                        "DEBUG MOUSEPOS: {},{}",
+                        mouse_position().0,
+                        mouse_position().1
+                    )
+                    .as_str(),
+                    10.0,
+                    30.0,
+                    18.0,
+                    BLACK,
+                );
 
                 // get the new game state that was most recently received from the connection thread
                 let local_gs = { game_state.lock().unwrap().clone() };
@@ -115,25 +144,41 @@ async fn main() {
                 // game type dependent code
                 match &local_gs.game_type {
                     GameType::PONG(pgs) => {
-
                         // render each client from their client state as a pong paddle
                         for client in &local_gs.client_list {
                             let client_state = client.1;
                             let team_color = {
                                 match client_state.team_id {
-                                    BlueTeam => {BLUE}
-                                    RedTeam => {RED}
-                                    //_ => {GRAY}
+                                    BlueTeam => BLUE,
+                                    RedTeam => RED, //_ => {GRAY}
                                 }
                             };
-                            draw_rectangle(client_state.mouse_pos.0,client_state.mouse_pos.1,hattrick_packets_lib::PONG_PADDLE_WIDTH,hattrick_packets_lib::PONG_PADDLE_HEIGHT,team_color);
+                            draw_rectangle(
+                                client_state.pos.0,
+                                client_state.pos.1,
+                                hattrick_packets_lib::PONG_PADDLE_WIDTH,
+                                hattrick_packets_lib::PONG_PADDLE_HEIGHT,
+                                team_color,
+                            );
                         }
                         // draw the ball from the servers data
-                        draw_circle(pgs.ball_x,pgs.ball_y,hattrick_packets_lib::PONG_BALL_RADIUS,BLACK);
+                        draw_circle(
+                            pgs.ball_x,
+                            pgs.ball_y,
+                            hattrick_packets_lib::PONG_BALL_RADIUS,
+                            BLACK,
+                        );
                         // println!("BALL CORDS: {},{}", pgs.ball_x,pgs.ball_y);
                         draw_text(
-                            format!("Blue points: {}, Red points: {}", pgs.blue_points,pgs.red_points).as_str(),
-                            10.0,20.0,18.0,BLACK
+                            format!(
+                                "Blue points: {}, Red points: {}",
+                                pgs.blue_points, pgs.red_points
+                            )
+                            .as_str(),
+                            10.0,
+                            20.0,
+                            18.0,
+                            BLACK,
                         )
                     }
                 }
@@ -142,6 +187,7 @@ async fn main() {
                 next_frame().await;
             }
 
+            // state for when a game was being played, but the connection was lost.
             LocalState::LostConnection => {
                 clear_background(WHITE);
                 draw_text(
@@ -157,7 +203,7 @@ async fn main() {
                     connect_thread = Some(spawn_connect_thread(
                         game_state.clone(),
                         running_thread_state.clone(),
-                        ip.clone(),
+                        _ip.clone(),
                         team_id.clone(),
                     ));
                     local_state = LocalState::Playing;
@@ -199,37 +245,26 @@ async fn main() {
     }
 }
 
+/// This function takes in the game state arc mutex, the running state arc mutex, an ip address, and the team to connect to and joins the given ip game server.
+/// It will mutate the game state each frame by locking the mutex. To stop the connection thread, set the running state to false. This thread also concludes when connection is lost.
 fn spawn_connect_thread(
     game_state: Arc<Mutex<GameState>>,
     running: Arc<Mutex<bool>>,
     ip_address: String,
-    team_id: Team
+    team_id: Team,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut stream = TcpStream::connect(ip_address).unwrap();
         let _ = stream.set_read_timeout(Option::from(Duration::from_secs(5)));
         let _ = stream.set_write_timeout(Option::from(Duration::from_secs(5)));
-        let mut local_gs: Option<GameState> = None;
+        let mut _local_gs: Option<GameState> = None;
         println!("connected");
         loop {
             let mut buf: [u8; 4096] = [0; 4096];
 
-            let client_packet = ClientState {
+            let client_packet = ClientInfo {
                 time: SystemTime::now(),
-                mouse_pos: {
-                    let pos: (f32,f32) = match &local_gs {
-                        None => { mouse_position() }
-                        Some(gs) => {
-                            match &gs.game_type {
-                                GameType::PONG(_) => { // offset the mouse position when we are playing pong so we can have the cursor be at the center of the rectangle
-                                    (mouse_position().0 - 50.0, mouse_position().1)
-                                }
-                            }
-                        }
-                    };
-                    //(mouse_position().0 - 50.0, mouse_position().1)
-                    pos
-                },
+                mouse_pos: mouse_position(),
                 team_id: team_id.clone(),
             };
             let ser = serde_json::to_string(&client_packet).unwrap();
@@ -257,7 +292,7 @@ fn spawn_connect_thread(
                 Ok(gs) => match game_state.lock() {
                     Ok(mut lock) => {
                         *lock = gs.clone();
-                        local_gs = Some(gs.clone());
+                        _local_gs = Some(gs.clone());
                     }
                     Err(e) => {
                         println!("mutex guard error: {e}");
@@ -278,6 +313,9 @@ fn spawn_connect_thread(
     })
 }
 
+/// This function simply sleeps the given thread for the duration of time necessary to keep the game running at a maximum of 60 fps.
+/// To calculate number of milliseconds to wait each frame, divide 1000 by the desired framerate.
+/// E.g. 1000.0 ms/60.0 = 16.66_ ms meaning each frame needs to be 16.66_ ms delayed to make a good 60 fps.
 async fn frame_delay() {
     let minimum_frame_time = 1. / 60.;
     let frame_time = get_frame_time();
