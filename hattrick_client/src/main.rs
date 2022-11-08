@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
+use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
+
 
 enum LocalState {
     AwaitingIp,
@@ -27,12 +29,9 @@ async fn main() {
     {
         ip = "localhost:8111".to_string();
     }
-    let mut team_id = 0; // BLUE = 0, RED = 1
+    let mut team_id = BlueTeam; // BLUE = 0, RED = 1
 
     loop {
-
-
-
         match local_state { // check game state to decide what we are doing
 
             LocalState::AwaitingIp => {
@@ -43,18 +42,33 @@ async fn main() {
                     a: 1.0,
                 });
 
+                #[cfg(debug_assertions)]
+                draw_text(format!("DEBUG MOUSEPOS: {},{}", mouse_position().0, mouse_position().1).as_str(),10.0,300.0,18.0,BLACK);
+
                 root_ui().label(None, "IP Address");
                 root_ui().input_text(0, "", &mut ip);
 
-                if root_ui().button(None,"Blue Team") {team_id = 0;}
-                if root_ui().button(None,"Red Team") {team_id = 1;}
+                if root_ui().button(None,"Blue Team") {team_id = BlueTeam;}
+                if root_ui().button(None,"Red Team") {team_id = RedTeam;}
+
+                let team_color = {
+                    match &team_id {
+                        BlueTeam => {BLUE}
+                        RedTeam => {RED}
+                        //_ => {GRAY}
+                    }
+                };
+
+                // draw_text("Team Color")
+                root_ui().label(None,"Team: ");
+                draw_rectangle(40.0,85.0,10.0,10.0,team_color);
 
                 if root_ui().button(None, "Connect") {
                     connect_thread = Some(spawn_connect_thread(
                         game_state.clone(),
                         running_thread_state.clone(),
                         ip.clone(),
-                        team_id,
+                        team_id.clone(),
                     ));
                     local_state = LocalState::Playing;
                 }
@@ -107,9 +121,9 @@ async fn main() {
                             let client_state = client.1;
                             let team_color = {
                                 match client_state.team_id {
-                                    0 => {BLUE}
-                                    1 => {RED}
-                                    _ => {GRAY}
+                                    BlueTeam => {BLUE}
+                                    RedTeam => {RED}
+                                    //_ => {GRAY}
                                 }
                             };
                             draw_rectangle(client_state.mouse_pos.0,client_state.mouse_pos.1,hattrick_packets_lib::PONG_PADDLE_WIDTH,hattrick_packets_lib::PONG_PADDLE_HEIGHT,team_color);
@@ -144,7 +158,7 @@ async fn main() {
                         game_state.clone(),
                         running_thread_state.clone(),
                         ip.clone(),
-                        team_id,
+                        team_id.clone(),
                     ));
                     local_state = LocalState::Playing;
                 }
@@ -189,7 +203,7 @@ fn spawn_connect_thread(
     game_state: Arc<Mutex<GameState>>,
     running: Arc<Mutex<bool>>,
     ip_address: String,
-    team_id: i32
+    team_id: Team
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut stream = TcpStream::connect(ip_address).unwrap();
@@ -216,7 +230,7 @@ fn spawn_connect_thread(
                     //(mouse_position().0 - 50.0, mouse_position().1)
                     pos
                 },
-                team_id,
+                team_id: team_id.clone(),
             };
             let ser = serde_json::to_string(&client_packet).unwrap();
 

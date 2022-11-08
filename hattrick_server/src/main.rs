@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 use rand::Rng;
 use uuid::Uuid;
 use hattrick_packets_lib::packets::GameType::PONG;
+use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 
 // super bad practice to do this, probably move away from this eventually.
 // if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
@@ -19,6 +20,7 @@ static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
     game_type: PONG(PongGameState::default()),
     client_list: Default::default(),
 });
+
 static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
 
 fn main() {
@@ -107,6 +109,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 };
                                 gs.ball_yvel = default_yvel;
                                 gs.red_points += 1;
+                                // println!("red points up");
                             }
                         } // bounce checks for ball on walls
 
@@ -115,7 +118,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
 
                             let cx = cs.mouse_pos.0; // client x
                             let cy = {
-                                if cs.team_id == 0 {
+                                if cs.team_id == BlueTeam {
                                     cs.mouse_pos.1 + ball_radius
                                 } else {
                                     cs.mouse_pos.1 - ball_radius
@@ -131,13 +134,13 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     let rand_xvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0);
                                     let rand_yvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0);
 
-                                    if gs.ball_xvel > 0.0 {
+                                    if gs.ball_xvel > 0.0 { // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
                                         gs.ball_xvel += rand_xvel_change;
                                     } else {
                                         gs.ball_xvel -= rand_xvel_change;
                                     }
 
-                                    if gs.ball_yvel > 0.0 {
+                                    if gs.ball_yvel > 0.0 { // ditto from comment above
                                         gs.ball_yvel += rand_yvel_change;
                                     } else {
                                         gs.ball_yvel -= rand_yvel_change;
@@ -177,7 +180,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                 ClientState {
                     time: SystemTime::now(),
                     mouse_pos: (0.0, 0.0),
-                    team_id: 0
+                    team_id: BlueTeam
                 },
             );
         }
@@ -203,10 +206,10 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     // here we can decide if we want to do anything with the client state given if it is different enough,
                     // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
                     let client_x = {
-                        if c.team_id == 0 {
-                            10.0
-                        } else {
-                            550.0
+
+                        match &c.team_id {
+                            BlueTeam => { 10.0 }
+                            RedTeam => { 550.0 }
                         }
                     };
 

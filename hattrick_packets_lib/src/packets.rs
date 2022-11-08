@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use crate::packets::GameType::PONG;
+use crate::packets::Team::BlueTeam;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GameState {
@@ -16,6 +17,12 @@ pub struct GameState {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameType {
     PONG(PongGameState),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Team {
+    RedTeam,
+    BlueTeam,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -32,7 +39,7 @@ pub struct PongGameState {
 pub struct ClientState {
     pub time: SystemTime,
     pub mouse_pos: (f32, f32),
-    pub team_id: i32,
+    pub team_id: Team,
 }
 
 impl Default for PongGameState {
@@ -103,7 +110,7 @@ impl Default for ClientState {
         ClientState {
             time: SystemTime::now(),
             mouse_pos: (0.0, 0.0),
-            team_id: 0,
+            team_id: BlueTeam,
         }
     }
 }
