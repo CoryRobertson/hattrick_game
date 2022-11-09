@@ -217,6 +217,8 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
         }
 
         loop {
+            // TODO: write logic that takes a timestamp when ever a write is successfully sent to a client, and if the last successful write happened more than 5 seconds ago, we can drop the client, otherwise keep waiting on them.
+            //  alternatively, let a specific number of packets be dropped before dropping a client.
             let local_gs = unsafe { &*STATIC_GAME_STATE };
             let ser = serde_json::to_string(local_gs).unwrap();
             let write = client_stream.write(ser.as_bytes());
