@@ -4,10 +4,6 @@ pub mod packets;
 pub mod pong;
 pub mod tank;
 
-pub static PONG_PADDLE_WIDTH: f32 = 100.0;
-pub static PONG_PADDLE_HEIGHT: f32 = 10.0;
-pub static PONG_BALL_RADIUS: f32 = 15.0;
-
 #[cfg(test)]
 mod tests {
     use crate::packets::ClientState;

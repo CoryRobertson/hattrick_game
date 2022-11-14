@@ -3,8 +3,9 @@ use hattrick_packets_lib::gametypes::GameType::PONG;
 use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
 use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::packets::*;
-use hattrick_packets_lib::pong::{PongClientState, PongGameState};
-use hattrick_packets_lib::{PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
+use hattrick_packets_lib::pong::{
+    PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
+};
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
@@ -81,7 +82,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
                 // basic game logic goes here
                 match copy_gs.game_type {
                     PONG(mut gs) => {
-                        let ball_radius = hattrick_packets_lib::PONG_BALL_RADIUS;
+                        let ball_radius = PONG_BALL_RADIUS;
 
                         // blue team top of screen, red team bottom
                         // ball physics multiplied by delta time since last "frame" allows us to run game speed  independent of application run speed.

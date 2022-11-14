@@ -2,6 +2,7 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
 use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::packets::*;
+use hattrick_packets_lib::pong::{PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -163,8 +164,8 @@ async fn main() {
                             draw_rectangle(
                                 client_pos.0,
                                 client_pos.1,
-                                hattrick_packets_lib::PONG_PADDLE_WIDTH,
-                                hattrick_packets_lib::PONG_PADDLE_HEIGHT,
+                                PONG_PADDLE_WIDTH,
+                                PONG_PADDLE_HEIGHT,
                                 team_color,
                             );
 
@@ -178,12 +179,7 @@ async fn main() {
                             );
                         }
                         // draw the ball from the servers data
-                        draw_circle(
-                            pgs.ball_x,
-                            pgs.ball_y,
-                            hattrick_packets_lib::PONG_BALL_RADIUS,
-                            BLACK,
-                        );
+                        draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
                         // println!("BALL CORDS: {},{}", pgs.ball_x,pgs.ball_y);
                         draw_text(
                             format!(

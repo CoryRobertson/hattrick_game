@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+pub static PONG_PADDLE_WIDTH: f32 = 100.0;
+pub static PONG_PADDLE_HEIGHT: f32 = 10.0;
+pub static PONG_BALL_RADIUS: f32 = 15.0;
+
 /// PongGameState is an example game type struct that holds all the data for the game mode, it should contain anything related to the game-type of its parent, in this case Pong.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PongGameState {
