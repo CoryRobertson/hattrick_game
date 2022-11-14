@@ -1,8 +1,11 @@
+pub mod clientinfo;
+pub mod clientstate;
 pub mod gamestate;
 pub mod gametypes;
-pub mod packets;
+pub mod keystate;
 pub mod pong;
 pub mod tank;
+pub mod team;
 
 #[cfg(test)]
 mod tests {

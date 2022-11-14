@@ -1,11 +1,14 @@
+use hattrick_packets_lib::clientinfo::ClientInfo;
+use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::PONG;
 use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
-use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::packets::*;
+use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
     PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
+use hattrick_packets_lib::team::Team::BlueTeam;
+use hattrick_packets_lib::team::Team::RedTeam;
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};

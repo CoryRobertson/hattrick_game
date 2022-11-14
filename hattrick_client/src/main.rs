@@ -1,8 +1,10 @@
+use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
-use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::packets::*;
+use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
+use hattrick_packets_lib::team::Team;
+use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};

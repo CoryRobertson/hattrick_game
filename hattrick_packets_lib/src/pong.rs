@@ -20,3 +20,17 @@ pub struct PongClientState {
     pub paddle_x: f32,
     pub paddle_y: f32,
 }
+
+/// Default for a GameType's state struct is gonna be the starting point for that given game, in this case, the pong game starts with these values.
+impl Default for PongGameState {
+    fn default() -> Self {
+        PongGameState {
+            ball_x: 50.0,
+            ball_y: 50.0,
+            ball_xvel: 5.0,
+            ball_yvel: 5.0,
+            red_points: 0,
+            blue_points: 0,
+        }
+    }
+}
