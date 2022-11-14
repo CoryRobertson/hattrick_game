@@ -26,6 +26,7 @@ async fn main() {
     let mut connect_thread = None;
     let mut local_state = LocalState::AwaitingIp;
     let mut _ip = String::new();
+
     #[cfg(debug_assertions)]
     {
         _ip = "localhost:8111".to_string();
@@ -160,6 +161,9 @@ async fn main() {
                                 hattrick_packets_lib::PONG_PADDLE_HEIGHT,
                                 team_color,
                             );
+
+                            #[cfg(debug_assertions)]
+                            draw_text(format!("DEBUG: {}",client_state.key_state).as_str(),client_state.pos.0,client_state.pos.1,18.0,BLACK);
                         }
                         // draw the ball from the servers data
                         draw_circle(
@@ -266,6 +270,7 @@ fn spawn_connect_thread(
                 time: SystemTime::now(),
                 mouse_pos: mouse_position(),
                 team_id: team_id.clone(),
+                key_state: KeyState::new(),
             };
             let ser = serde_json::to_string(&client_packet).unwrap();
 

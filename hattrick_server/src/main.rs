@@ -212,6 +212,8 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     time: SystemTime::now(),
                     pos: (0.0, 0.0),
                     team_id: BlueTeam,
+                    mouse_pos: (0.0, 0.0),
+                    key_state: KeyState::default(),
                 },
             );
         }
@@ -257,6 +259,8 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                 time: c.time,
                                 pos: (client_x, client_y),
                                 team_id: c.team_id,
+                                mouse_pos: c.mouse_pos,
+                                key_state: c.key_state,
                             };
 
                             unsafe {
