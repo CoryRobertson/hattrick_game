@@ -1,3 +1,5 @@
+use hattrick_packets_lib::gamestate::GameState;
+use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
 use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::packets::*;
 use macroquad::prelude::*;
@@ -36,7 +38,6 @@ async fn main() {
     loop {
         // check game state to decide what we are doing
         match local_state {
-
             // state for when the player is at the main menu and we are waiting for them to type in an ip address.
             LocalState::AwaitingIp => {
                 clear_background(Color {
@@ -148,22 +149,33 @@ async fn main() {
                         // render each client from their client state as a pong paddle
                         for client in &local_gs.client_list {
                             let client_state = client.1;
+                            let client_pos = match &client_state.game_type_info {
+                                GameTypeClient::PONG(pcs) => (pcs.paddle_x, pcs.paddle_y),
+                                _ => (0.0, 0.0),
+                            };
                             let team_color = {
                                 match client_state.team_id {
                                     BlueTeam => BLUE,
                                     RedTeam => RED, //_ => {GRAY}
                                 }
                             };
+
                             draw_rectangle(
-                                client_state.pos.0,
-                                client_state.pos.1,
+                                client_pos.0,
+                                client_pos.1,
                                 hattrick_packets_lib::PONG_PADDLE_WIDTH,
                                 hattrick_packets_lib::PONG_PADDLE_HEIGHT,
                                 team_color,
                             );
 
                             #[cfg(debug_assertions)]
-                            draw_text(format!("DEBUG: {}",client_state.key_state).as_str(),client_state.pos.0,client_state.pos.1,18.0,BLACK);
+                            draw_text(
+                                format!("DEBUG: {}", client_state.key_state).as_str(),
+                                client_pos.0,
+                                client_pos.1,
+                                18.0,
+                                BLACK,
+                            );
                         }
                         // draw the ball from the servers data
                         draw_circle(
@@ -184,6 +196,9 @@ async fn main() {
                             18.0,
                             BLACK,
                         )
+                    }
+                    GameType::TANK(_tgs) => {
+                        panic!("tank game not implemented");
                     }
                 }
 

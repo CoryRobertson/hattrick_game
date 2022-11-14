@@ -1,6 +1,9 @@
-use hattrick_packets_lib::packets::GameType::PONG;
+use hattrick_packets_lib::gamestate::GameState;
+use hattrick_packets_lib::gametypes::GameType::PONG;
+use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
 use hattrick_packets_lib::packets::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::packets::*;
+use hattrick_packets_lib::pong::{PongClientState, PongGameState};
 use hattrick_packets_lib::{PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
 use once_cell::unsync::Lazy;
 use rand::Rng;
@@ -111,7 +114,10 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 gs.ball_yvel = -default_yvel;
                                 gs.blue_points += 1;
                                 #[cfg(debug_assertions)]
-                                println!("blue points scored with ball xvel: {} and ball yvel: {}", gs.ball_xvel, gs.ball_yvel);
+                                println!(
+                                    "blue points scored with ball xvel: {} and ball yvel: {}",
+                                    gs.ball_xvel, gs.ball_yvel
+                                );
                             }
 
                             if gs.ball_y < 0.0 + ball_radius {
@@ -128,31 +134,47 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 gs.ball_yvel = default_yvel;
                                 gs.red_points += 1;
                                 #[cfg(debug_assertions)]
-                                println!("red points scored with ball xvel: {} and ball yvel: {}", gs.ball_xvel, gs.ball_yvel);
+                                println!(
+                                    "red points scored with ball xvel: {} and ball yvel: {}",
+                                    gs.ball_xvel, gs.ball_yvel
+                                );
                             }
                         } // bounce checks for ball on walls
 
                         for client in &copy_gs.client_list {
                             let cs = client.1;
 
-                            let cx = cs.pos.0; // client x
+                            // let cx = cs.pos.0;
+                            let cx = match &cs.game_type_info {
+                                GameTypeClient::PONG(pcs) => pcs.paddle_x,
+                                _ => 0.0,
+                            }; // client x
                             let cy = {
                                 if cs.team_id == BlueTeam {
-                                    cs.pos.1 + ball_radius
+                                    // cs.pos.1 + ball_radius
+                                    match &cs.game_type_info {
+                                        GameTypeClient::PONG(pcs) => pcs.paddle_y + ball_radius,
+                                        _ => 0.0,
+                                    }
                                 } else {
-                                    cs.pos.1 - ball_radius
+                                    // cs.pos.1 - ball_radius
+                                    match &cs.game_type_info {
+                                        GameTypeClient::PONG(pcs) => pcs.paddle_y - ball_radius,
+                                        _ => 0.0,
+                                    }
                                 }
                             }; // client y after taking into account the ball radius, cheap way to do it i know :)
                             let cw = PONG_PADDLE_WIDTH; // client width
                             let ch = PONG_PADDLE_HEIGHT; // client height
 
-                            if (gs.ball_y > cy && gs.ball_y < cy + ch) && (gs.ball_x > cx && gs.ball_x < cx + cw) { // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
+                            if (gs.ball_y > cy && gs.ball_y < cy + ch)
+                                && (gs.ball_x > cx && gs.ball_x < cx + cw)
+                            {
+                                // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
 
                                 gs.ball_yvel *= -1.0; // change the uppy downy velocity of the ball to its opposite
-                                let rand_xvel_change: f32 =
-                                    rand::thread_rng().gen_range(0.0..5.0); // generate a random new x velocity change for when a bounce needs to occur
-                                let rand_yvel_change: f32 =
-                                    rand::thread_rng().gen_range(0.0..5.0); // generate a random new y velocity change for when a bounce needs to occur
+                                let rand_xvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0); // generate a random new x velocity change for when a bounce needs to occur
+                                let rand_yvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0); // generate a random new y velocity change for when a bounce needs to occur
 
                                 if gs.ball_xvel > 0.0 {
                                     // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
@@ -171,12 +193,8 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "bounced with: new xvel ({}), new yvel ({}): {} {}",
-                                    rand_xvel_change,
-                                    rand_yvel_change,
-                                    gs.ball_xvel,
-                                    gs.ball_yvel
+                                    rand_xvel_change, rand_yvel_change, gs.ball_xvel, gs.ball_yvel
                                 );
-
                             } // bounce checks for ball on paddles of clients
                         } // client loop for game state
                         unsafe {
@@ -184,6 +202,10 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             STATIC_GAME_STATE.time = SystemTime::now();
                         }
                         previous_time = SystemTime::now();
+                    }
+
+                    GameType::TANK(_tgs) => {
+                        panic!("tank game not implemented");
                     }
                 }
             }
@@ -210,10 +232,14 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                 uuid.to_string(),
                 ClientState {
                     time: SystemTime::now(),
-                    pos: (0.0, 0.0),
+                    // pos: (0.0, 0.0),
                     team_id: BlueTeam,
                     mouse_pos: (0.0, 0.0),
                     key_state: KeyState::default(),
+                    game_type_info: GameTypeClient::PONG(PongClientState {
+                        paddle_x: 0.0,
+                        paddle_y: 0.0,
+                    }),
                 },
             );
         }
@@ -257,10 +283,14 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                             let client_state: ClientState = ClientState {
                                 // create the new client state from the information we have from the client info.
                                 time: c.time,
-                                pos: (client_x, client_y),
+                                // pos: (client_x, client_y),
                                 team_id: c.team_id,
                                 mouse_pos: c.mouse_pos,
                                 key_state: c.key_state,
+                                game_type_info: GameTypeClient::PONG(PongClientState {
+                                    paddle_x: client_x,
+                                    paddle_y: client_y,
+                                }),
                             };
 
                             unsafe {
@@ -268,6 +298,10 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                     .client_list
                                     .insert(uuid.to_string(), client_state)
                             };
+                        }
+
+                        GameType::TANK(_tgs) => {
+                            panic!("tank game not implemented");
                         }
                     }
                 }

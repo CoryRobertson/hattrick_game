@@ -1,42 +1,18 @@
-use crate::packets::GameType::PONG;
+use crate::gamestate::GameState;
+use crate::gametypes::GameType::PONG;
+use crate::gametypes::GameTypeClient;
 use crate::packets::Team::BlueTeam;
+use crate::pong::{PongClientState, PongGameState};
+use macroquad::prelude::KeyCode;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
-
-/// GameState holds the game type, system time, and list of players. This is the single struct that is sent to each client every frame of gameplay.
-/// Examples of things that go in GameState are things that need to be known by literally all clients, and the server, at the same time for gameplay to work properly.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GameState {
-    pub time: SystemTime,
-    pub game_type: GameType,
-    pub client_list: HashMap<String, ClientState>,
-}
-
-/// GameType is the game mode that is being played, for example pong, each game mode contains a struct within the enumeration that stores the games data like any objects the game should render
-/// On top of that, the GameType is to be pattern matched for each frame, allowing the workflow of adding new game types to be really easy :)
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum GameType {
-    PONG(PongGameState),
-}
 
 /// Team is the team selection enumeration that the player can choose, at the moment, it is stored on the client and sent to server. This might be changed later :)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Team {
     RedTeam,
     BlueTeam,
-}
-
-/// PongGameState is an example game type struct that holds all the data for the game mode, it should contain anything related to the game-type of its parent, in this case Pong.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PongGameState {
-    pub ball_x: f32,
-    pub ball_y: f32,
-    pub ball_xvel: f32,
-    pub ball_yvel: f32,
-    pub red_points: i32,
-    pub blue_points: i32,
 }
 
 /// Client info is the struct that each client creates, serializes, and sends to the server, it is not meant to be used directly to store client data, but to be interpreted.
@@ -47,6 +23,50 @@ pub struct ClientInfo {
     pub time: SystemTime,
     pub mouse_pos: (f32, f32),
     pub team_id: Team,
+    pub key_state: KeyState,
+}
+
+/// KeyState is a struct that contains all keys that the game listens to.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KeyState {
+    pub w_key: bool,
+    pub a_key: bool,
+    pub s_key: bool,
+    pub d_key: bool,
+    pub space_bar: bool,
+}
+
+impl KeyState {
+    /// new() by default returns a key state with all inputs checked from the keyboard.
+    pub fn new() -> KeyState {
+        KeyState {
+            w_key: macroquad::prelude::is_key_down(KeyCode::W),
+            a_key: macroquad::prelude::is_key_down(KeyCode::A),
+            s_key: macroquad::prelude::is_key_down(KeyCode::S),
+            d_key: macroquad::prelude::is_key_down(KeyCode::D),
+            space_bar: macroquad::prelude::is_key_down(KeyCode::Space),
+        }
+    }
+    /// default() initialized all states to false.
+    pub fn default() -> KeyState {
+        KeyState {
+            w_key: false,
+            a_key: false,
+            s_key: false,
+            d_key: false,
+            space_bar: false,
+        }
+    }
+}
+
+impl Display for KeyState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "W:{}, A:{}, S:{}, D:{}, SPACE:{}",
+            self.w_key, self.a_key, self.s_key, self.d_key, self.space_bar
+        )
+    }
 }
 
 /// ClientState is a struct that the server generates using the data given from each client in the form of a ClientInfo struct. This separation allows for good programming ergonomics.
@@ -55,8 +75,10 @@ pub struct ClientInfo {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientState {
     pub time: SystemTime,
-    pub pos: (f32, f32),
     pub team_id: Team,
+    pub mouse_pos: (f32, f32),
+    pub key_state: KeyState,
+    pub game_type_info: GameTypeClient,
 }
 
 /// Default for a GameType's state struct is gonna be the starting point for that given game, in this case, the pong game starts with these values.
@@ -90,13 +112,13 @@ impl ClientState {
     pub fn differ_count(&self, cs: &ClientState) -> i32 {
         let mut count = 0;
 
-        if self.pos.0 != cs.pos.0 {
-            count += 1;
-        }
-
-        if self.pos.1 != cs.pos.1 {
-            count += 1;
-        }
+        // if self.pos.0 != cs.pos.0 {
+        //     count += 1;
+        // }
+        //
+        // if self.pos.1 != cs.pos.1 {
+        //     count += 1;
+        // }
 
         if self.time != cs.time {
             count += 1;
@@ -127,6 +149,7 @@ impl Default for ClientInfo {
             time: SystemTime::now(),
             mouse_pos: (0.0, 0.0),
             team_id: BlueTeam,
+            key_state: KeyState::default(),
         }
     }
 }
@@ -135,8 +158,14 @@ impl Default for ClientState {
     fn default() -> Self {
         ClientState {
             time: SystemTime::now(),
-            pos: (0.0, 0.0),
+            // pos: (0.0, 0.0),
             team_id: BlueTeam,
+            mouse_pos: (0.0, 0.0),
+            key_state: KeyState::default(),
+            game_type_info: GameTypeClient::PONG(PongClientState {
+                paddle_x: 0.0,
+                paddle_y: 0.0,
+            }),
         }
     }
 }
