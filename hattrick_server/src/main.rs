@@ -7,7 +7,7 @@ use hattrick_packets_lib::pong::{
     PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
 use hattrick_packets_lib::tank::{
-    TankClientState, TankGameState, TANK_MOVE_SPEED, TANK_TURN_SPEED,
+    TankClientState, TankGameState, TANK_ACCEL, TANK_MAX_SPEED, TANK_TURN_SPEED,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -19,6 +19,7 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
+use hattrick_packets_lib::round_digits;
 
 // super bad practice to do this, probably move away from this eventually.
 // if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
@@ -216,6 +217,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     rad.cos()
                                 }
                             };
+
                             let change_y = {
                                 let rad = client.1.tank_client_state.rotation.to_radians();
                                 if rad.sin().is_nan() {
@@ -225,34 +227,63 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 }
                             };
 
-                            println!("cx: {}, cy: {}", change_x, change_y);
+                            let current_speed = (client.1.tank_client_state.tank_x_vel.powi(2)
+                                + client.1.tank_client_state.tank_y_vel.powi(2))
+                            .sqrt();
+
 
                             if client_key_state.d_key {
                                 //client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
-                                client.1.tank_client_state.rotation -= TANK_TURN_SPEED;
+                                client.1.tank_client_state.rotation += TANK_TURN_SPEED;
                             }
                             if client_key_state.a_key {
                                 //client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED;
-                                client.1.tank_client_state.rotation += TANK_TURN_SPEED;
+                                client.1.tank_client_state.rotation -= TANK_TURN_SPEED;
                             }
                             if client_key_state.w_key {
                                 //client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
 
-                                    client.1.tank_client_state.tank_x += TANK_MOVE_SPEED * change_x;
-
-
-                                    client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED * change_y;
-
+                                // client.1.tank_client_state.tank_x += TANK_MOVE_SPEED * change_x;
+                                //
+                                // client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED * change_y;
+                                if current_speed < TANK_MAX_SPEED {
+                                    client.1.tank_client_state.tank_x_vel += TANK_ACCEL;
+                                    client.1.tank_client_state.tank_y_vel += TANK_ACCEL;
+                                }
                             }
                             if client_key_state.s_key {
                                 //client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
 
-                                    client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED * change_x;
+                                // client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED * change_x;
+                                //
+                                // client.1.tank_client_state.tank_y += TANK_MOVE_SPEED * change_y;
 
-
-                                    client.1.tank_client_state.tank_y += TANK_MOVE_SPEED * change_y;
-
+                                if current_speed > -TANK_MAX_SPEED {
+                                    client.1.tank_client_state.tank_x_vel -= TANK_ACCEL;
+                                    client.1.tank_client_state.tank_y_vel -= TANK_ACCEL;
+                                }
                             }
+
+                            client.1.tank_client_state.tank_x_vel *= 0.9;
+                            client.1.tank_client_state.tank_y_vel *= 0.9;
+
+                            if client.1.tank_client_state.tank_x_vel.abs() < 0.05 || client.1.tank_client_state.tank_y_vel.abs() < 0.05 {
+                                client.1.tank_client_state.tank_x_vel = 0.0;
+                                client.1.tank_client_state.tank_y_vel = 0.0;
+                            }
+
+                            client.1.tank_client_state.tank_x +=
+                                client.1.tank_client_state.tank_x_vel * change_x;
+                            client.1.tank_client_state.tank_y +=
+                                client.1.tank_client_state.tank_y_vel * change_y;
+
+                            round_digits(&mut client.1.tank_client_state.tank_x_vel,4);
+                            round_digits(&mut client.1.tank_client_state.tank_y_vel,4);
+                            round_digits(&mut client.1.tank_client_state.tank_x,4);
+                            round_digits(&mut client.1.tank_client_state.tank_y,4);
+
+                            println!("cx: {}, cy: {}", change_x, change_y);
+
                         }
 
                         unsafe {
@@ -362,18 +393,20 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                         TANK(_tgs) => {
                             // panic!("tank game not implemented");
 
-                            let prev_client_x = match &local_gs.client_list.get(&*uuid) {
-                                None => 0.0,
-                                Some(cx) => cx.tank_client_state.tank_x,
+                            let prev_client = match local_gs.client_list.get(&*uuid) {
+                                None => ClientState::default(),
+                                Some(client) => client.clone(),
                             };
-                            let prev_client_y = match &local_gs.client_list.get(&*uuid) {
-                                None => 0.0,
-                                Some(cy) => cy.tank_client_state.tank_y,
-                            };
-                            let prev_client_rot = match &local_gs.client_list.get(&*uuid) {
-                                None => 0.0,
-                                Some(crot) => crot.tank_client_state.rotation,
-                            };
+
+                            let prev_client_x = prev_client.tank_client_state.tank_x;
+
+                            let prev_client_y = prev_client.tank_client_state.tank_y;
+
+                            let prev_client_rot = prev_client.tank_client_state.rotation;
+
+                            let prev_client_xvel = prev_client.tank_client_state.tank_x_vel;
+
+                            let prev_client_yvel = prev_client.tank_client_state.tank_y_vel;
 
                             let client_state: ClientState = ClientState {
                                 // create the new client state from the information we have from the client info.
@@ -386,6 +419,8 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                     rotation: prev_client_rot,
                                     tank_x: prev_client_x,
                                     tank_y: prev_client_y,
+                                    tank_x_vel: prev_client_xvel,
+                                    tank_y_vel: prev_client_yvel,
                                 },
                             };
 

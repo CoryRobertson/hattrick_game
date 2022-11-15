@@ -7,6 +7,11 @@ pub mod pong;
 pub mod tank;
 pub mod team;
 
+pub fn round_digits(num: &mut f32, digits: u32) {
+    let multiple = (10.0 as f32).powi(digits as i32);
+    *num = ((*num * multiple) as f32).round() / multiple;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::packets::ClientState;

@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
+use hattrick_packets_lib::tank::{TANK_HEIGHT, TANK_WIDTH};
 
 enum LocalState {
     AwaitingIp,
@@ -199,12 +200,15 @@ async fn main() {
                         for client in &local_gs.client_list {
                             let cx = client.1.tank_client_state.tank_x;
                             let cy = client.1.tank_client_state.tank_y;
+                            let rot = client.1.tank_client_state.rotation;
                             let team_color = {
                                 match client.1.team_id {
                                     RedTeam => RED,
                                     BlueTeam => BLUE,
                                 }
                             };
+
+                            #[cfg(debug_assertions)]
                             draw_text(
                                 format!("DEBUG: {:?}", client.1.tank_client_state).as_str(),
                                 cx,
@@ -212,7 +216,9 @@ async fn main() {
                                 18.0,
                                 BLACK,
                             );
-                            draw_rectangle(cx, cy, 10.0, 10.0, team_color);
+
+                            draw_rectangle(cx, cy, TANK_WIDTH, TANK_HEIGHT, team_color);
+                            draw_poly(cx + (TANK_WIDTH/2.0),cy + (TANK_HEIGHT/2.0),3,(TANK_WIDTH+TANK_HEIGHT)/2.0/2.0,rot,GRAY);
                         }
                     }
                 }
