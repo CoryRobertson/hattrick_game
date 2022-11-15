@@ -34,3 +34,12 @@ impl Default for PongGameState {
         }
     }
 }
+
+impl Default for PongClientState {
+    fn default() -> Self {
+        PongClientState {
+            paddle_x: 0.0,
+            paddle_y: 0.0,
+        }
+    }
+}

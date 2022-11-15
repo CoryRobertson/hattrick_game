@@ -1,6 +1,6 @@
-use crate::gametypes::GameTypeClient;
 use crate::keystate::KeyState;
 use crate::pong::PongClientState;
+use crate::tank::TankClientState;
 use crate::team::Team;
 use crate::team::Team::BlueTeam;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,8 @@ pub struct ClientState {
     pub team_id: Team,
     pub mouse_pos: (f32, f32),
     pub key_state: KeyState,
-    pub game_type_info: GameTypeClient,
+    pub pong_client_state: PongClientState,
+    pub tank_client_state: TankClientState,
 }
 
 impl ClientState {
@@ -52,10 +53,8 @@ impl Default for ClientState {
             team_id: BlueTeam,
             mouse_pos: (0.0, 0.0),
             key_state: KeyState::default(),
-            game_type_info: GameTypeClient::PONG(PongClientState {
-                paddle_x: 0.0,
-                paddle_y: 0.0,
-            }),
+            pong_client_state: Default::default(),
+            tank_client_state: TankClientState::default(),
         }
     }
 }

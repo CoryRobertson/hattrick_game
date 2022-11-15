@@ -1,6 +1,6 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::gamestate::GameState;
-use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
+use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
 use hattrick_packets_lib::team::Team;
@@ -152,10 +152,10 @@ async fn main() {
                         // render each client from their client state as a pong paddle
                         for client in &local_gs.client_list {
                             let client_state = client.1;
-                            let client_pos = match &client_state.game_type_info {
-                                GameTypeClient::PONG(pcs) => (pcs.paddle_x, pcs.paddle_y),
-                                _ => (0.0, 0.0),
-                            };
+                            let client_pos = (
+                                client_state.pong_client_state.paddle_x,
+                                client_state.pong_client_state.paddle_y,
+                            );
                             let team_color = {
                                 match client_state.team_id {
                                     BlueTeam => BLUE,
@@ -196,7 +196,24 @@ async fn main() {
                         )
                     }
                     GameType::TANK(_tgs) => {
-                        panic!("tank game not implemented");
+                        for client in &local_gs.client_list {
+                            let cx = client.1.tank_client_state.tank_x;
+                            let cy = client.1.tank_client_state.tank_y;
+                            let team_color = {
+                                match client.1.team_id {
+                                    RedTeam => RED,
+                                    BlueTeam => BLUE,
+                                }
+                            };
+                            draw_text(
+                                format!("DEBUG: {:?}", client.1.tank_client_state).as_str(),
+                                cx,
+                                cy + 5.0,
+                                18.0,
+                                BLACK,
+                            );
+                            draw_rectangle(cx, cy, 10.0, 10.0, team_color);
+                        }
                     }
                 }
 
@@ -277,7 +294,7 @@ fn spawn_connect_thread(
         let mut _local_gs: Option<GameState> = None;
         println!("connected");
         loop {
-            let mut buf: [u8; 4096] = [0; 4096];
+            let mut buf: [u8; 8192] = [0; 8192];
 
             let client_packet = ClientInfo {
                 time: SystemTime::now(),
@@ -285,6 +302,7 @@ fn spawn_connect_thread(
                 team_id: team_id.clone(),
                 key_state: KeyState::new(),
             };
+
             let ser = serde_json::to_string(&client_packet).unwrap();
 
             let read = stream.read(&mut buf);

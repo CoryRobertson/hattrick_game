@@ -1,11 +1,13 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
-use hattrick_packets_lib::gametypes::GameType::PONG;
-use hattrick_packets_lib::gametypes::{GameType, GameTypeClient};
+use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
     PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
+};
+use hattrick_packets_lib::tank::{
+    TankClientState, TankGameState, TANK_MOVE_SPEED, TANK_TURN_SPEED,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -35,6 +37,10 @@ fn main() {
     println!("I am the server!");
     let server = TcpListener::bind("0.0.0.0:8111").unwrap();
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
+
+    unsafe {
+        STATIC_GAME_STATE.game_type = TANK(TankGameState::default());
+    }
 
     let connect_thread = thread::spawn(move || {
         for response in server.incoming() {
@@ -148,24 +154,14 @@ fn spawn_game_thread() -> JoinHandle<()> {
                         for client in &copy_gs.client_list {
                             let cs = client.1;
 
-                            // let cx = cs.pos.0;
-                            let cx = match &cs.game_type_info {
-                                GameTypeClient::PONG(pcs) => pcs.paddle_x,
-                                _ => 0.0,
-                            }; // client x
+                            let cx = cs.pong_client_state.paddle_x; // client x
                             let cy = {
                                 if cs.team_id == BlueTeam {
                                     // cs.pos.1 + ball_radius
-                                    match &cs.game_type_info {
-                                        GameTypeClient::PONG(pcs) => pcs.paddle_y + ball_radius,
-                                        _ => 0.0,
-                                    }
+                                    cs.pong_client_state.paddle_y + ball_radius
                                 } else {
                                     // cs.pos.1 - ball_radius
-                                    match &cs.game_type_info {
-                                        GameTypeClient::PONG(pcs) => pcs.paddle_y - ball_radius,
-                                        _ => 0.0,
-                                    }
+                                    cs.pong_client_state.paddle_y - ball_radius
                                 }
                             }; // client y after taking into account the ball radius, cheap way to do it i know :)
                             let cw = PONG_PADDLE_WIDTH; // client width
@@ -205,14 +201,38 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             STATIC_GAME_STATE.game_type = PONG(gs);
                             STATIC_GAME_STATE.time = SystemTime::now();
                         }
-                        previous_time = SystemTime::now();
                     }
 
-                    GameType::TANK(_tgs) => {
-                        panic!("tank game not implemented");
+                    TANK(mut _tgs) => {
+                        let mut client_list = copy_gs.client_list.clone();
+                        for mut client in &mut client_list {
+                            let client_key_state = &client.1.key_state;
+
+                            if client_key_state.d_key {
+                                client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
+                                client.1.tank_client_state.rotation -= TANK_TURN_SPEED;
+                            }
+                            if client_key_state.a_key {
+                                client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED;
+                                client.1.tank_client_state.rotation += TANK_TURN_SPEED;
+                            }
+                            if client_key_state.w_key {
+                                client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
+                            }
+                            if client_key_state.s_key {
+                                client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
+                            }
+                        }
+
+                        unsafe {
+                            STATIC_GAME_STATE.game_type = TANK(_tgs);
+                            STATIC_GAME_STATE.client_list = client_list;
+                            STATIC_GAME_STATE.time = SystemTime::now();
+                        }
                     }
                 }
             }
+            previous_time = SystemTime::now();
             sleep(Duration::from_millis(GAME_LOOP_THREAD_DELAY_MS)); // maybe remove this? at the moment unsure
         }
     })
@@ -240,10 +260,9 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     team_id: BlueTeam,
                     mouse_pos: (0.0, 0.0),
                     key_state: KeyState::default(),
-                    game_type_info: GameTypeClient::PONG(PongClientState {
-                        paddle_x: 0.0,
-                        paddle_y: 0.0,
-                    }),
+
+                    pong_client_state: Default::default(),
+                    tank_client_state: Default::default(),
                 },
             );
         }
@@ -255,7 +274,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             let ser = serde_json::to_string(local_gs).unwrap();
             let write = client_stream.write(ser.as_bytes());
             let flush = client_stream.flush();
-            let mut buf: [u8; 4096] = [0; 4096];
+            let mut buf: [u8; 8192] = [0; 8192];
             let read = client_stream.read(&mut buf);
             let mut cleaned_buf = vec![];
 
@@ -291,10 +310,15 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                 team_id: c.team_id,
                                 mouse_pos: c.mouse_pos,
                                 key_state: c.key_state,
-                                game_type_info: GameTypeClient::PONG(PongClientState {
+                                // game_type_info: GameTypeClient::PONG(PongClientState {
+                                //     paddle_x: client_x,
+                                //     paddle_y: client_y,
+                                // }),
+                                pong_client_state: PongClientState {
                                     paddle_x: client_x,
                                     paddle_y: client_y,
-                                }),
+                                },
+                                tank_client_state: Default::default(),
                             };
 
                             unsafe {
@@ -304,8 +328,41 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                             };
                         }
 
-                        GameType::TANK(_tgs) => {
-                            panic!("tank game not implemented");
+                        TANK(_tgs) => {
+                            // panic!("tank game not implemented");
+
+                            let prev_client_x = match &local_gs.client_list.get(&*uuid) {
+                                None => 0.0,
+                                Some(cx) => cx.tank_client_state.tank_x,
+                            };
+                            let prev_client_y = match &local_gs.client_list.get(&*uuid) {
+                                None => 0.0,
+                                Some(cy) => cy.tank_client_state.tank_y,
+                            };
+                            let prev_client_rot = match &local_gs.client_list.get(&*uuid) {
+                                None => 0.0,
+                                Some(crot) => crot.tank_client_state.rotation,
+                            };
+
+                            let client_state: ClientState = ClientState {
+                                // create the new client state from the information we have from the client info.
+                                time: c.time,
+                                team_id: c.team_id,
+                                mouse_pos: c.mouse_pos,
+                                key_state: c.key_state.clone(),
+                                pong_client_state: PongClientState::default(),
+                                tank_client_state: TankClientState {
+                                    rotation: prev_client_rot,
+                                    tank_x: prev_client_x,
+                                    tank_y: prev_client_y,
+                                },
+                            };
+
+                            unsafe {
+                                STATIC_GAME_STATE
+                                    .client_list
+                                    .insert(uuid.to_string(), client_state);
+                            }
                         }
                     }
                 }
