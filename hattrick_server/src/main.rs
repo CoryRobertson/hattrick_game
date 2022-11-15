@@ -4,8 +4,10 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
-    PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
+    get_pong_paddle_width, PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_BALL_VEL_ADD_MAX,
+    PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
+use hattrick_packets_lib::round_digits;
 use hattrick_packets_lib::tank::{
     TankClientState, TankGameState, TANK_ACCEL, TANK_MAX_SPEED, TANK_TURN_SPEED,
 };
@@ -19,7 +21,6 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
-use hattrick_packets_lib::round_digits;
 
 // super bad practice to do this, probably move away from this eventually.
 // if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
@@ -165,17 +166,21 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     cs.pong_client_state.paddle_y - ball_radius
                                 }
                             }; // client y after taking into account the ball radius, cheap way to do it i know :)
-                            let cw = PONG_PADDLE_WIDTH; // client width
+                               //let cw = PONG_PADDLE_WIDTH; // client width
+                            let cw = get_pong_paddle_width(&copy_gs.client_list, &cs.team_id); // client width
                             let ch = PONG_PADDLE_HEIGHT; // client height
 
                             if (gs.ball_y > cy && gs.ball_y < cy + ch)
                                 && (gs.ball_x > cx && gs.ball_x < cx + cw)
                             {
                                 // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
-
+                                //FIXME: bug, when ball bounces off paddle, instead of inverting its velocity, it should set it so that it goes away from the paddle.
+                                //  This is because if the ball is inside the paddle it will internally bounce a lot, which is bad.
                                 gs.ball_yvel *= -1.0; // change the uppy downy velocity of the ball to its opposite
-                                let rand_xvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0); // generate a random new x velocity change for when a bounce needs to occur
-                                let rand_yvel_change: f32 = rand::thread_rng().gen_range(0.0..5.0); // generate a random new y velocity change for when a bounce needs to occur
+                                let rand_xvel_change: f32 = rand::thread_rng()
+                                    .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new x velocity change for when a bounce needs to occur
+                                let rand_yvel_change: f32 = rand::thread_rng()
+                                    .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new y velocity change for when a bounce needs to occur
 
                                 if gs.ball_xvel > 0.0 {
                                     // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
@@ -231,7 +236,6 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 + client.1.tank_client_state.tank_y_vel.powi(2))
                             .sqrt();
 
-
                             if client_key_state.d_key {
                                 //client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
                                 client.1.tank_client_state.rotation += TANK_TURN_SPEED;
@@ -267,7 +271,9 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             client.1.tank_client_state.tank_x_vel *= 0.9;
                             client.1.tank_client_state.tank_y_vel *= 0.9;
 
-                            if client.1.tank_client_state.tank_x_vel.abs() < 0.05 || client.1.tank_client_state.tank_y_vel.abs() < 0.05 {
+                            if client.1.tank_client_state.tank_x_vel.abs() < 0.05
+                                || client.1.tank_client_state.tank_y_vel.abs() < 0.05
+                            {
                                 client.1.tank_client_state.tank_x_vel = 0.0;
                                 client.1.tank_client_state.tank_y_vel = 0.0;
                             }
@@ -277,13 +283,12 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             client.1.tank_client_state.tank_y +=
                                 client.1.tank_client_state.tank_y_vel * change_y;
 
-                            round_digits(&mut client.1.tank_client_state.tank_x_vel,4);
-                            round_digits(&mut client.1.tank_client_state.tank_y_vel,4);
-                            round_digits(&mut client.1.tank_client_state.tank_x,4);
-                            round_digits(&mut client.1.tank_client_state.tank_y,4);
+                            round_digits(&mut client.1.tank_client_state.tank_x_vel, 4);
+                            round_digits(&mut client.1.tank_client_state.tank_y_vel, 4);
+                            round_digits(&mut client.1.tank_client_state.tank_x, 4);
+                            round_digits(&mut client.1.tank_client_state.tank_y, 4);
 
                             println!("cx: {}, cy: {}", change_x, change_y);
-
                         }
 
                         unsafe {

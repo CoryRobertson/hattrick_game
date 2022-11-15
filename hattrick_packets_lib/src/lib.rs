@@ -14,10 +14,6 @@ pub fn round_digits(num: &mut f32, digits: u32) {
 
 #[cfg(test)]
 mod tests {
-    use crate::packets::ClientState;
-    use crate::packets::Team::{BlueTeam, RedTeam};
-    use std::ops::Add;
-    use std::time::{Duration, SystemTime};
 
     #[test]
     fn difference_check_test() {

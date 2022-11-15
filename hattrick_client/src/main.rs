@@ -2,7 +2,8 @@ use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::keystate::KeyState;
-use hattrick_packets_lib::pong::{PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH};
+use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT};
+use hattrick_packets_lib::tank::{TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
 use macroquad::prelude::*;
@@ -13,7 +14,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
-use hattrick_packets_lib::tank::{TANK_HEIGHT, TANK_WIDTH};
 
 enum LocalState {
     AwaitingIp,
@@ -163,11 +163,13 @@ async fn main() {
                                     RedTeam => RED, //_ => {GRAY}
                                 }
                             };
+                            let width =
+                                get_pong_paddle_width(&local_gs.client_list, &client_state.team_id);
 
                             draw_rectangle(
                                 client_pos.0,
                                 client_pos.1,
-                                PONG_PADDLE_WIDTH,
+                                width,
                                 PONG_PADDLE_HEIGHT,
                                 team_color,
                             );
@@ -182,7 +184,23 @@ async fn main() {
                             );
                         }
                         // draw the ball from the servers data
+                        let angle_of_travel = {
+                            let next_x = pgs.ball_x + pgs.ball_xvel;
+                            let next_y = pgs.ball_y + pgs.ball_yvel;
+                            let x = pgs.ball_x;
+                            let y = pgs.ball_y;
+                            (next_y - y).atan2(next_x - x).to_degrees()
+                        };
                         draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
+                        draw_poly(
+                            pgs.ball_x,
+                            pgs.ball_y,
+                            3,
+                            PONG_BALL_RADIUS,
+                            angle_of_travel,
+                            GRAY,
+                        );
+
                         // println!("BALL CORDS: {},{}", pgs.ball_x,pgs.ball_y);
                         draw_text(
                             format!(
@@ -218,7 +236,14 @@ async fn main() {
                             );
 
                             draw_rectangle(cx, cy, TANK_WIDTH, TANK_HEIGHT, team_color);
-                            draw_poly(cx + (TANK_WIDTH/2.0),cy + (TANK_HEIGHT/2.0),3,(TANK_WIDTH+TANK_HEIGHT)/2.0/2.0,rot,GRAY);
+                            draw_poly(
+                                cx + (TANK_WIDTH / 2.0),
+                                cy + (TANK_HEIGHT / 2.0),
+                                3,
+                                (TANK_WIDTH + TANK_HEIGHT) / 2.0 / 2.0,
+                                rot,
+                                GRAY,
+                            );
                         }
                     }
                 }
