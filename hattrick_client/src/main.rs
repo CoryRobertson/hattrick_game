@@ -322,26 +322,35 @@ fn spawn_connect_thread(
                     cleaned_buf.push(value);
                 }
             }
-            let output_from_buf = String::from_utf8(cleaned_buf).unwrap();
+            //let output_from_buf = String::from_utf8(cleaned_buf).unwrap();
 
-            match serde_json::from_str::<GameState>(&output_from_buf) {
-                Ok(gs) => match game_state.lock() {
-                    Ok(mut lock) => {
-                        *lock = gs.clone();
-                        _local_gs = Some(gs.clone());
+            // only read the output if its ok, if not skip a frame. This can happen because of parsing errors.
+            match String::from_utf8(cleaned_buf) {
+                Ok(output_from_buf) => {
+                    match serde_json::from_str::<GameState>(&output_from_buf) {
+                        Ok(gs) => match game_state.lock() {
+                            Ok(mut lock) => {
+                                *lock = gs.clone();
+                                _local_gs = Some(gs.clone());
+                            }
+                            Err(e) => {
+                                println!("mutex guard error: {e}");
+                            }
+                        },
+                        Err(e) => {
+                            println!("failed to parse: {e}");
+                        }
+                    };
+
+                    if !(*running.lock().unwrap()) {
+                        // if the thread running state has been instructed to stop, then we break out of the loop gracefully
+                        break;
                     }
-                    Err(e) => {
-                        println!("mutex guard error: {e}");
-                    }
-                },
-                Err(e) => {
-                    println!("failed to parse: {e}");
                 }
-            };
-
-            if !(*running.lock().unwrap()) {
-                // if the thread running state has been instructed to stop, then we break out of the loop gracefully
-                break;
+                Err(err) => {
+                    println!("Skipped packet due to parse error: \n{}", err);
+                    //println!("cleaned buffer length: {}, contents: {:?}",cleaned_buf.len(), cleaned_buf);
+                }
             }
         }
         *running.lock().unwrap() = false;

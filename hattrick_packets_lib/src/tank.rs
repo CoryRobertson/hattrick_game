@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub static TANK_MOVE_SPEED: f32 = 1.0;
-pub static TANK_TURN_SPEED: f32 = 1.0;
+pub static TANK_TURN_SPEED: f32 = 2.0;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TankGameState {

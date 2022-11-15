@@ -208,19 +208,47 @@ fn spawn_game_thread() -> JoinHandle<()> {
                         for mut client in &mut client_list {
                             let client_key_state = &client.1.key_state;
 
+                            let change_x = {
+                                let rad = client.1.tank_client_state.rotation.to_radians();
+                                if rad.cos().is_nan() {
+                                    0.0
+                                } else { rad.cos() }
+                            };
+                            let change_y = {
+                                let rad = client.1.tank_client_state.rotation.to_radians();
+                                if rad.sin().is_nan() {
+                                    0.0
+                                } else { rad.sin() }
+                            };
+
+                            println!("cx: {}, cy: {}", change_x, change_y);
+
                             if client_key_state.d_key {
-                                client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
+                                //client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
                                 client.1.tank_client_state.rotation -= TANK_TURN_SPEED;
                             }
                             if client_key_state.a_key {
-                                client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED;
+                                //client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED;
                                 client.1.tank_client_state.rotation += TANK_TURN_SPEED;
                             }
                             if client_key_state.w_key {
-                                client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
+                                //client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
+                                if change_x != 0.0 {
+                                    client.1.tank_client_state.tank_x += TANK_MOVE_SPEED * change_x;
+                                }
+                                if change_y != 0.0 {
+                                    client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED * change_y;
+                                }
+
                             }
                             if client_key_state.s_key {
-                                client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
+                                //client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
+                                if change_x != 0.0 {
+                                    client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED / change_x;
+                                }
+                                if change_y != 0.0 {
+                                    client.1.tank_client_state.tank_y += TANK_MOVE_SPEED / change_y;
+                                }
                             }
                         }
 
