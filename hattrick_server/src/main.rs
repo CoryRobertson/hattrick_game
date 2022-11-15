@@ -212,13 +212,17 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 let rad = client.1.tank_client_state.rotation.to_radians();
                                 if rad.cos().is_nan() {
                                     0.0
-                                } else { rad.cos() }
+                                } else {
+                                    rad.cos()
+                                }
                             };
                             let change_y = {
                                 let rad = client.1.tank_client_state.rotation.to_radians();
                                 if rad.sin().is_nan() {
                                     0.0
-                                } else { rad.sin() }
+                                } else {
+                                    rad.sin()
+                                }
                             };
 
                             println!("cx: {}, cy: {}", change_x, change_y);
@@ -233,22 +237,21 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             }
                             if client_key_state.w_key {
                                 //client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
-                                if change_x != 0.0 {
+
                                     client.1.tank_client_state.tank_x += TANK_MOVE_SPEED * change_x;
-                                }
-                                if change_y != 0.0 {
+
+
                                     client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED * change_y;
-                                }
 
                             }
                             if client_key_state.s_key {
                                 //client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
-                                if change_x != 0.0 {
-                                    client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED / change_x;
-                                }
-                                if change_y != 0.0 {
-                                    client.1.tank_client_state.tank_y += TANK_MOVE_SPEED / change_y;
-                                }
+
+                                    client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED * change_x;
+
+
+                                    client.1.tank_client_state.tank_y += TANK_MOVE_SPEED * change_y;
+
                             }
                         }
 
