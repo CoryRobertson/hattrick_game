@@ -12,14 +12,14 @@ pub static GAME_HEIGHT: f32 = 600.0;
 
 /// Round a given number to a given number of digits.
 pub fn round_digits(num: &mut f32, digits: u32) {
-    let multiple = (10.0 as f32).powi(digits as i32);
-    *num = ((*num * multiple) as f32).round() / multiple;
+    let multiple = 10.0_f32.powi(digits as i32);
+    *num = (*num * multiple).round() / multiple;
 }
 
 /// Round a given number to a number of digits.
 pub fn round_number(num: &f32, digits: u32) -> f32 {
-    let multiple = (10.0 as f32).powi(digits as i32);
-    ((num * multiple) as f32).round() / multiple
+    let multiple = 10.0_f32.powi(digits as i32);
+    (num * multiple).round() / multiple
 }
 
 /// Subtract two vectors and return a new vector that would be A pointing towards B.
@@ -50,39 +50,74 @@ pub fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    use crate::{distance, round_number, two_point_angle};
 
     #[test]
-    fn difference_check_test() {
-        // dummy unit test, maybe add some later
-        // let cs1 = ClientState {
-        //     time: SystemTime::now(),
-        //     pos: (0.0, 0.0),
-        //     team_id: BlueTeam,
-        // };
-        // let cs2 = ClientState {
-        //     time: cs1.time.clone(),
-        //     pos: (0.8, 0.0),
-        //     team_id: BlueTeam,
-        // };
-        // let cs3 = ClientState {
-        //     time: SystemTime::now().add(Duration::from_secs(2)),
-        //     pos: (10.0, 0.0),
-        //     team_id: BlueTeam,
-        // };
-        // let cs4 = ClientState {
-        //     time: SystemTime::now().add(Duration::from_secs(3)),
-        //     pos: (10.0, 10.0),
-        //     team_id: BlueTeam,
-        // };
-        // let cs5 = ClientState {
-        //     time: SystemTime::now().add(Duration::from_secs(3)),
-        //     pos: (10.0, 10.0),
-        //     team_id: RedTeam,
-        // };
-        // assert_eq!(cs1.differ_count(&cs1), 0);
-        // assert_eq!(cs1.differ_count(&cs2), 1);
-        // assert_eq!(cs1.differ_count(&cs3), 2);
-        // assert_eq!(cs1.differ_count(&cs4), 3);
-        // assert_eq!(cs4.differ_count(&cs5), 1);
+    fn round_num_test() {
+        let first_num = 10.12345;
+        let rounded_num = 10.12;
+        assert_eq!(round_number(&first_num, 2), rounded_num);
+        let first_num = -987.654_3;
+        let rounded_num = -987.654;
+        assert_eq!(round_number(&first_num, 3), rounded_num);
+    }
+
+    #[test]
+    fn distance_test() {
+        let x1 = -1.0;
+        let y1 = 0.0;
+        let x2 = 1.0;
+        let y2 = 0.0;
+        assert_eq!(distance(x1, y1, x2, y2), 2.0);
+    }
+
+    #[test]
+    fn angle_points_diagonal_test() {
+        let point1 = (0.0, 0.0);
+        let point2 = (0.5, 0.5);
+        assert_eq!(two_point_angle(point1, point2), 45.0);
+        let point2 = (0.0, 0.0);
+        let point1 = (0.5, 0.5);
+        assert_eq!(two_point_angle(point1, point2), 45.0 - 180.0);
+    }
+
+    #[test]
+    fn angle_points_upwards_test() {
+        let point1 = (0.0, 0.0);
+        let point2 = (0.0, 1.0);
+        assert_eq!(two_point_angle(point1, point2), 90.0);
+        let point2 = (0.0, 0.0);
+        let point1 = (0.0, 1.0);
+        assert_eq!(two_point_angle(point1, point2), 90.0 - 180.0);
+    }
+
+    #[test]
+    fn angle_points_downwards_test() {
+        let point1 = (0.0, 0.0);
+        let point2 = (0.0, -1.0);
+        assert_eq!(two_point_angle(point1, point2), -90.0);
+        let point2 = (0.0, 0.0);
+        let point1 = (0.0, -1.0);
+        assert_eq!(two_point_angle(point1, point2), -90.0 + 180.0);
+    }
+
+    #[test]
+    fn angle_points_right_test() {
+        let point1 = (0.0, 0.0);
+        let point2 = (1.0, 0.0);
+        assert_eq!(two_point_angle(point1, point2), 0.0);
+        let point2 = (0.0, 0.0);
+        let point1 = (1.0, 0.0);
+        assert_eq!(two_point_angle(point1, point2), 0.0 + 180.0);
+    }
+
+    #[test]
+    fn angle_points_left_test() {
+        let point1 = (0.0, 0.0);
+        let point2 = (-1.0, 0.0);
+        assert_eq!(two_point_angle(point1, point2), 180.0);
+        let point2 = (0.0, 0.0);
+        let point1 = (-1.0, 0.0);
+        assert_eq!(two_point_angle(point1, point2), 180.0 - 180.0);
     }
 }

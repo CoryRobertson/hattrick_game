@@ -241,21 +241,13 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             if client_key_state.a_key {
                                 client.1.tank_client_state.rotation -= TANK_TURN_SPEED * difference;
                             }
-                            if client_key_state.w_key {
-                                if current_speed < TANK_MAX_SPEED {
-                                    client.1.tank_client_state.tank_x_vel +=
-                                        TANK_ACCEL * difference;
-                                    client.1.tank_client_state.tank_y_vel +=
-                                        TANK_ACCEL * difference;
-                                }
+                            if client_key_state.w_key && current_speed < TANK_MAX_SPEED {
+                                client.1.tank_client_state.tank_x_vel += TANK_ACCEL * difference;
+                                client.1.tank_client_state.tank_y_vel += TANK_ACCEL * difference;
                             }
-                            if client_key_state.s_key {
-                                if -current_speed > -TANK_MAX_SPEED {
-                                    client.1.tank_client_state.tank_x_vel -=
-                                        TANK_ACCEL * difference;
-                                    client.1.tank_client_state.tank_y_vel -=
-                                        TANK_ACCEL * difference;
-                                }
+                            if client_key_state.s_key && -current_speed > -TANK_MAX_SPEED {
+                                client.1.tank_client_state.tank_x_vel -= TANK_ACCEL * difference;
+                                client.1.tank_client_state.tank_y_vel -= TANK_ACCEL * difference;
                             }
 
                             let last_shot_diff = SystemTime::now()

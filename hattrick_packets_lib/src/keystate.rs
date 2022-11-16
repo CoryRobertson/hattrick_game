@@ -23,8 +23,11 @@ impl KeyState {
             space_bar: macroquad::prelude::is_key_down(KeyCode::Space),
         }
     }
-    /// default() initialized all states to false.
-    pub fn default() -> KeyState {
+}
+
+impl Default for KeyState {
+    /// initialized all states to false.
+    fn default() -> KeyState {
         KeyState {
             w_key: false,
             a_key: false,

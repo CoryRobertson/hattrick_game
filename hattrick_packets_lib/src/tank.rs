@@ -27,7 +27,7 @@ pub static TANK_BULLET_RADIUS: f32 = 5.0;
 //  and checks its point distance from each tank on the map on each frame to find if it is to hit a tank.
 //  It also has a function called step, which moves its location based on its xvel and yvel.
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TankGameState {
     pub red_score: i32,
     pub blue_score: i32,
@@ -52,16 +52,6 @@ pub struct TankBullet {
     pub y_vel: f32,
     pub bounce_count: i32,
     pub team: Team,
-}
-
-impl Default for TankGameState {
-    fn default() -> Self {
-        TankGameState {
-            red_score: 0,
-            blue_score: 0,
-            bullets: vec![],
-        }
-    }
 }
 
 impl Default for TankClientState {
