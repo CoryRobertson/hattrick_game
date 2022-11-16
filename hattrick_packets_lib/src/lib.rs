@@ -30,14 +30,8 @@ pub fn vector_subtract(a: (f32, f32), b: (f32, f32)) -> (f32, f32) {
 }
 
 /// Finds the given angle from a two points
-pub fn get_angle_from_point_to_point(point: (f32, f32), point2: (f32, f32)) -> f32 {
-    let point_to_mouse_pos_vector = vector_subtract((point.0, point.1), point2);
-    get_angle_of_travel_degrees(
-        point.0,
-        point.1,
-        point_to_mouse_pos_vector.0,
-        point_to_mouse_pos_vector.1,
-    )
+pub fn two_point_angle(point: (f32, f32), point2: (f32, f32)) -> f32 {
+    (point2.1 - point.1).atan2(point2.0 - point.0).to_degrees()
 }
 
 /// Return the degree angle of travel based on the x,y,xvel,yvel of the object.

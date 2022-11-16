@@ -1,7 +1,6 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
-use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
@@ -14,7 +13,7 @@ use hattrick_packets_lib::tank::{
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
-use hattrick_packets_lib::{get_angle_from_point_to_point, round_digits, GAME_HEIGHT, GAME_WIDTH};
+use hattrick_packets_lib::{round_digits, GAME_HEIGHT, GAME_WIDTH, two_point_angle};
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
@@ -270,7 +269,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
 
                                 let bullet_xvel = {
                                     let deg =
-                                        get_angle_from_point_to_point((tx, ty), client.1.mouse_pos)
+                                        two_point_angle((tx, ty), client.1.mouse_pos)
                                             .to_radians();
                                     if deg.cos().is_nan() {
                                         0.0
@@ -281,7 +280,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
 
                                 let bullet_yvel = {
                                     let deg =
-                                        get_angle_from_point_to_point((tx, ty), client.1.mouse_pos)
+                                        two_point_angle((tx, ty), client.1.mouse_pos)
                                             .to_radians();
                                     if deg.sin().is_nan() {
                                         0.0
@@ -395,99 +394,100 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             // TODO: write logic that takes a timestamp when ever a write is successfully sent to a client, and if the last successful write happened more than 5 seconds ago, we can drop the client, otherwise keep waiting on them.
             //  alternatively, let a specific number of packets be dropped before dropping a client.
             let local_gs = unsafe { &*STATIC_GAME_STATE };
-            let ser = serde_json::to_string(local_gs).unwrap(); // FIXME: dont just unwrap this value if this causes issues
-            let write = client_stream.write(ser.as_bytes());
-            let flush = client_stream.flush();
-            let mut buf: [u8; 8192] = [0; 8192];
-            let read = client_stream.read(&mut buf);
-            let mut cleaned_buf = vec![];
+            if let Ok(ser) = serde_json::to_string(local_gs) {
+                let write = client_stream.write(ser.as_bytes());
+                let flush = client_stream.flush();
+                let mut buf: [u8; 8192] = [0; 8192];
+                let read = client_stream.read(&mut buf);
+                let mut cleaned_buf = vec![];
 
-            for value in buf {
-                // make small buffer of the data into a vector sent by the server
-                if !String::from_utf8_lossy(&[value]).contains('\0') {
-                    cleaned_buf.push(value);
+                for value in buf {
+                    // make small buffer of the data into a vector sent by the server
+                    if !String::from_utf8_lossy(&[value]).contains('\0') {
+                        cleaned_buf.push(value);
+                    }
                 }
-            }
 
-            let clean = String::from_utf8(cleaned_buf).unwrap();
-            match serde_json::from_str::<ClientInfo>(&clean) {
-                Ok(c) => {
-                    // here we can decide if we want to do anything with the client state given if it is different enough,
-                    // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
-                    match &local_gs.game_type {
-                        // depending on the game type, handle the clients info differently.
-                        PONG(_pgs) => {
-                            let client_y = {
-                                // set the clients y coordinate based on their team, top for blue, bottom for red
-                                match &c.team_id {
-                                    BlueTeam => 10.0,
-                                    RedTeam => 550.0,
+                let clean = String::from_utf8(cleaned_buf).unwrap();
+                match serde_json::from_str::<ClientInfo>(&clean) {
+                    Ok(c) => {
+                        // here we can decide if we want to do anything with the client state given if it is different enough,
+                        // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
+                        match &local_gs.game_type {
+                            // depending on the game type, handle the clients info differently.
+                            PONG(_pgs) => {
+                                let client_y = {
+                                    // set the clients y coordinate based on their team, top for blue, bottom for red
+                                    match &c.team_id {
+                                        BlueTeam => 10.0,
+                                        RedTeam => 550.0,
+                                    }
+                                };
+
+                                let client_x = c.mouse_pos.0 - (PONG_PADDLE_WIDTH / 2.0); // the client renders the rectangle from its top left corner, so to center it, we subtract half the paddle width
+
+                                let client_state: ClientState = ClientState {
+                                    // create the new client state from the information we have from the client info.
+                                    time: c.time,
+                                    // pos: (client_x, client_y),
+                                    team_id: c.team_id,
+                                    mouse_pos: c.mouse_pos,
+                                    key_state: c.key_state,
+                                    // game_type_info: GameTypeClient::PONG(PongClientState {
+                                    //     paddle_x: client_x,
+                                    //     paddle_y: client_y,
+                                    // }),
+                                    pong_client_state: PongClientState {
+                                        paddle_x: client_x,
+                                        paddle_y: client_y,
+                                    },
+                                    tank_client_state: Default::default(),
+                                };
+
+                                unsafe {
+                                    STATIC_GAME_STATE
+                                        .client_list
+                                        .insert(uuid.to_string(), client_state)
+                                };
+                            }
+
+                            TANK(_tgs) => {
+                                let prev_client = match local_gs.client_list.get(&*uuid) {
+                                    None => ClientState::default(),
+                                    Some(client) => client.clone(),
+                                };
+
+                                let client_state: ClientState = ClientState {
+                                    // create the new client state from the information we have from the client info.
+                                    time: c.time,
+                                    team_id: c.team_id,
+                                    mouse_pos: c.mouse_pos,
+                                    key_state: c.key_state.clone(),
+                                    pong_client_state: PongClientState::default(),
+                                    tank_client_state: prev_client.tank_client_state,
+                                };
+
+                                unsafe {
+                                    STATIC_GAME_STATE
+                                        .client_list
+                                        .insert(uuid.to_string(), client_state);
                                 }
-                            };
-
-                            let client_x = c.mouse_pos.0 - (PONG_PADDLE_WIDTH / 2.0); // the client renders the rectangle from its top left corner, so to center it, we subtract half the paddle width
-
-                            let client_state: ClientState = ClientState {
-                                // create the new client state from the information we have from the client info.
-                                time: c.time,
-                                // pos: (client_x, client_y),
-                                team_id: c.team_id,
-                                mouse_pos: c.mouse_pos,
-                                key_state: c.key_state,
-                                // game_type_info: GameTypeClient::PONG(PongClientState {
-                                //     paddle_x: client_x,
-                                //     paddle_y: client_y,
-                                // }),
-                                pong_client_state: PongClientState {
-                                    paddle_x: client_x,
-                                    paddle_y: client_y,
-                                },
-                                tank_client_state: Default::default(),
-                            };
-
-                            unsafe {
-                                STATIC_GAME_STATE
-                                    .client_list
-                                    .insert(uuid.to_string(), client_state)
-                            };
-                        }
-
-                        TANK(_tgs) => {
-                            let prev_client = match local_gs.client_list.get(&*uuid) {
-                                None => ClientState::default(),
-                                Some(client) => client.clone(),
-                            };
-
-                            let client_state: ClientState = ClientState {
-                                // create the new client state from the information we have from the client info.
-                                time: c.time,
-                                team_id: c.team_id,
-                                mouse_pos: c.mouse_pos,
-                                key_state: c.key_state.clone(),
-                                pong_client_state: PongClientState::default(),
-                                tank_client_state: prev_client.tank_client_state,
-                            };
-
-                            unsafe {
-                                STATIC_GAME_STATE
-                                    .client_list
-                                    .insert(uuid.to_string(), client_state);
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    println!("client disconnected: {}", e);
+                    Err(e) => {
+                        println!("client disconnected: {}", e);
+                        unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
+                        break;
+                    }
+                };
+
+                if write.is_err() || flush.is_err() || read.is_err() {
+                    println!("client disconnected: Socket closed");
                     unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
                     break;
                 }
-            };
-
-            if write.is_err() || flush.is_err() || read.is_err() {
-                println!("client disconnected: Socket closed");
-                unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
-                break;
-            }
+            } // only even attempt to make a packet to send to the client if we successfully serialize it, this can fail when the unsafe copy of STATIC_GAME_STATE is corrupted.
         }
     })
 }

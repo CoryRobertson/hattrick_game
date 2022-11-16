@@ -6,10 +6,7 @@ use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_P
 use hattrick_packets_lib::tank::{TANK_BULLET_RADIUS, TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::{
-    get_angle_from_point_to_point, get_angle_of_travel_degrees, round_number, GAME_HEIGHT,
-    GAME_WIDTH,
-};
+use hattrick_packets_lib::{get_angle_of_travel_degrees, GAME_HEIGHT, GAME_WIDTH, two_point_angle, round_number};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -223,10 +220,7 @@ async fn main() {
                             let cx = client.1.tank_client_state.tank_x;
                             let cy = client.1.tank_client_state.tank_y;
                             let rot = client.1.tank_client_state.rotation;
-                            let mouse_angle = round_number(
-                                &get_angle_from_point_to_point((cx, cy), client.1.mouse_pos),
-                                2,
-                            );
+                            let mouse_angle = round_number(&two_point_angle((cx,cy),client.1.mouse_pos),2);
                             let team_color = {
                                 match client.1.team_id {
                                     RedTeam => RED,
@@ -237,9 +231,10 @@ async fn main() {
                             #[cfg(debug_assertions)]
                             draw_text(
                                 format!(
-                                    "DEBUG Tank speed: {},{}",
+                                    "DEBUG Tank speed: {},{}, ANGLE: {}",
                                     client.1.tank_client_state.tank_x_vel,
-                                    client.1.tank_client_state.tank_y_vel
+                                    client.1.tank_client_state.tank_y_vel,
+                                    mouse_angle
                                 )
                                 .as_str(),
                                 cx,
