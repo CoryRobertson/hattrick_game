@@ -1,6 +1,7 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
+use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
@@ -28,8 +29,6 @@ use uuid::Uuid;
 // following this, we could use a function that detects how different the client state is from the current ClientState and only update it if the difference is high enough.
 static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
     time: SystemTime::UNIX_EPOCH,
-    // x: 0.0,
-    // y: 0.0,
     game_type: PONG(PongGameState::default()),
     client_list: Default::default(),
 });
@@ -167,7 +166,6 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     cs.pong_client_state.paddle_y - ball_radius
                                 }
                             }; // client y after taking into account the ball radius, cheap way to do it i know :)
-                               //let cw = PONG_PADDLE_WIDTH; // client width
                             let cw = get_pong_paddle_width(&copy_gs.client_list, &cs.team_id); // client width
                             let ch = PONG_PADDLE_HEIGHT; // client height
 
@@ -455,22 +453,10 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                         }
 
                         TANK(_tgs) => {
-                            // panic!("tank game not implemented");
-
                             let prev_client = match local_gs.client_list.get(&*uuid) {
                                 None => ClientState::default(),
                                 Some(client) => client.clone(),
                             };
-
-                            // let prev_client_x = prev_client.tank_client_state.tank_x;
-                            //
-                            // let prev_client_y = prev_client.tank_client_state.tank_y;
-                            //
-                            // let prev_client_rot = prev_client.tank_client_state.rotation;
-                            //
-                            // let prev_client_xvel = prev_client.tank_client_state.tank_x_vel;
-                            //
-                            // let prev_client_yvel = prev_client.tank_client_state.tank_y_vel;
 
                             let client_state: ClientState = ClientState {
                                 // create the new client state from the information we have from the client info.

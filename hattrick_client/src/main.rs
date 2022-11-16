@@ -189,14 +189,6 @@ async fn main() {
                                 BLACK,
                             );
                         }
-                        // draw the ball from the servers data
-                        // let angle_of_travel = {
-                        //     let next_x = pgs.ball_x + pgs.ball_xvel;
-                        //     let next_y = pgs.ball_y + pgs.ball_yvel;
-                        //     let x = pgs.ball_x;
-                        //     let y = pgs.ball_y;
-                        //     (next_y - y).atan2(next_x - x).to_degrees()
-                        // };
 
                         draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
                         draw_poly(
