@@ -288,7 +288,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             round_digits(&mut client.1.tank_client_state.tank_x, 4);
                             round_digits(&mut client.1.tank_client_state.tank_y, 4);
 
-                            println!("cx: {}, cy: {}", change_x, change_y);
+                            // println!("cx: {}, cy: {}", change_x, change_y);
                         }
 
                         unsafe {
@@ -338,7 +338,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             // TODO: write logic that takes a timestamp when ever a write is successfully sent to a client, and if the last successful write happened more than 5 seconds ago, we can drop the client, otherwise keep waiting on them.
             //  alternatively, let a specific number of packets be dropped before dropping a client.
             let local_gs = unsafe { &*STATIC_GAME_STATE };
-            let ser = serde_json::to_string(local_gs).unwrap();
+            let ser = serde_json::to_string(local_gs).unwrap(); // FIXME: dont just unwrap this value if this causes issues
             let write = client_stream.write(ser.as_bytes());
             let flush = client_stream.flush();
             let mut buf: [u8; 8192] = [0; 8192];

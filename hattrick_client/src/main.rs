@@ -6,6 +6,9 @@ use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_P
 use hattrick_packets_lib::tank::{TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
+use hattrick_packets_lib::{
+    get_angle_from_point_to_point, get_angle_of_travel_degrees, round_number,
+};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -184,20 +187,26 @@ async fn main() {
                             );
                         }
                         // draw the ball from the servers data
-                        let angle_of_travel = {
-                            let next_x = pgs.ball_x + pgs.ball_xvel;
-                            let next_y = pgs.ball_y + pgs.ball_yvel;
-                            let x = pgs.ball_x;
-                            let y = pgs.ball_y;
-                            (next_y - y).atan2(next_x - x).to_degrees()
-                        };
+                        // let angle_of_travel = {
+                        //     let next_x = pgs.ball_x + pgs.ball_xvel;
+                        //     let next_y = pgs.ball_y + pgs.ball_yvel;
+                        //     let x = pgs.ball_x;
+                        //     let y = pgs.ball_y;
+                        //     (next_y - y).atan2(next_x - x).to_degrees()
+                        // };
+
                         draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
                         draw_poly(
                             pgs.ball_x,
                             pgs.ball_y,
                             3,
                             PONG_BALL_RADIUS,
-                            angle_of_travel,
+                            get_angle_of_travel_degrees(
+                                pgs.ball_x,
+                                pgs.ball_y,
+                                pgs.ball_xvel,
+                                pgs.ball_yvel,
+                            ),
                             GRAY,
                         );
 
@@ -219,6 +228,10 @@ async fn main() {
                             let cx = client.1.tank_client_state.tank_x;
                             let cy = client.1.tank_client_state.tank_y;
                             let rot = client.1.tank_client_state.rotation;
+                            let mouse_angle = round_number(
+                                &get_angle_from_point_to_point((cx, cy), client.1.mouse_pos),
+                                2,
+                            );
                             let team_color = {
                                 match client.1.team_id {
                                     RedTeam => RED,
@@ -228,12 +241,19 @@ async fn main() {
 
                             #[cfg(debug_assertions)]
                             draw_text(
-                                format!("DEBUG: {:?}", client.1.tank_client_state).as_str(),
+                                format!(
+                                    "DEBUG TURRET ANGLE: {}, CLIENT STATE: {:?}",
+                                    mouse_angle, client.1.tank_client_state
+                                )
+                                .as_str(),
                                 cx,
                                 cy + 5.0,
                                 18.0,
                                 BLACK,
                             );
+
+                            #[cfg(debug_assertions)]
+                            draw_poly(cx, cy, 3, 15.0, mouse_angle, GREEN);
 
                             draw_rectangle(cx, cy, TANK_WIDTH, TANK_HEIGHT, team_color);
                             draw_poly(
