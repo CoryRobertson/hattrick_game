@@ -9,11 +9,12 @@ use hattrick_packets_lib::pong::{
 };
 use hattrick_packets_lib::tank::{
     TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
-    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN, TANK_TURN_SPEED,
+    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
+    TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
-use hattrick_packets_lib::{round_digits, GAME_HEIGHT, GAME_WIDTH, two_point_angle};
+use hattrick_packets_lib::{round_digits, two_point_angle, GAME_HEIGHT, GAME_WIDTH};
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
@@ -267,10 +268,14 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 let tx = client.1.tank_client_state.tank_x;
                                 let ty = client.1.tank_client_state.tank_y;
 
+                                // the bullet xvel and yvel are added from TANK_WIDTH or TANK_HEIGHT /2 because we want to spawn the bullet from the middle of the tank, not the top left corner
+                                // which is where its x and y coordinates lie.
                                 let bullet_xvel = {
-                                    let deg =
-                                        two_point_angle((tx, ty), client.1.mouse_pos)
-                                            .to_radians();
+                                    let deg = two_point_angle(
+                                        (tx + (TANK_WIDTH / 2.0), ty + (TANK_HEIGHT / 2.0)),
+                                        client.1.mouse_pos,
+                                    )
+                                    .to_radians();
                                     if deg.cos().is_nan() {
                                         0.0
                                     } else {
@@ -278,10 +283,13 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     }
                                 };
 
+                                // see previous comments
                                 let bullet_yvel = {
-                                    let deg =
-                                        two_point_angle((tx, ty), client.1.mouse_pos)
-                                            .to_radians();
+                                    let deg = two_point_angle(
+                                        (tx + (TANK_WIDTH / 2.0), ty + (TANK_HEIGHT / 2.0)),
+                                        client.1.mouse_pos,
+                                    )
+                                    .to_radians();
                                     if deg.sin().is_nan() {
                                         0.0
                                     } else {
@@ -289,9 +297,10 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                     }
                                 };
 
+                                // see previous comments
                                 tgs.bullets.push(TankBullet {
-                                    x: tx,
-                                    y: ty,
+                                    x: tx + (TANK_WIDTH / 2.0),
+                                    y: ty + (TANK_HEIGHT / 2.0),
                                     x_vel: bullet_xvel,
                                     y_vel: bullet_yvel,
                                     bounce_count: 0,

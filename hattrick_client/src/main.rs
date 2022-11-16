@@ -6,7 +6,9 @@ use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_P
 use hattrick_packets_lib::tank::{TANK_BULLET_RADIUS, TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::{get_angle_of_travel_degrees, GAME_HEIGHT, GAME_WIDTH, two_point_angle, round_number};
+use hattrick_packets_lib::{
+    get_angle_of_travel_degrees, round_number, two_point_angle, GAME_HEIGHT, GAME_WIDTH,
+};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -217,10 +219,16 @@ async fn main() {
                     }
                     GameType::TANK(tgs) => {
                         for client in &local_gs.client_list {
+                            // alias variables for code clarity
                             let cx = client.1.tank_client_state.tank_x;
                             let cy = client.1.tank_client_state.tank_y;
                             let rot = client.1.tank_client_state.rotation;
-                            let mouse_angle = round_number(&two_point_angle((cx,cy),client.1.mouse_pos),2);
+
+                            // angle from the tank to the mouse
+                            let mouse_angle =
+                                round_number(&two_point_angle((cx, cy), client.1.mouse_pos), 2);
+
+                            // team color for the tank
                             let team_color = {
                                 match client.1.team_id {
                                     RedTeam => RED,
@@ -228,6 +236,7 @@ async fn main() {
                                 }
                             };
 
+                            // debug info for each tank
                             #[cfg(debug_assertions)]
                             draw_text(
                                 format!(
@@ -243,23 +252,30 @@ async fn main() {
                                 BLACK,
                             );
 
-                            #[cfg(debug_assertions)]
-                            draw_poly(cx, cy, 3, 15.0, mouse_angle, GREEN);
+                            // tank polygon for body of tank
+                            draw_poly(
+                                cx + (TANK_WIDTH / 2.0),
+                                cy + (TANK_HEIGHT / 2.0),
+                                5,
+                                (TANK_WIDTH + TANK_HEIGHT) / 2.0,
+                                rot,
+                                team_color,
+                            );
 
-                            draw_rectangle(cx, cy, TANK_WIDTH, TANK_HEIGHT, team_color);
+                            // tank polygon for barrel of the tank
                             draw_poly(
                                 cx + (TANK_WIDTH / 2.0),
                                 cy + (TANK_HEIGHT / 2.0),
                                 3,
-                                (TANK_WIDTH + TANK_HEIGHT) / 2.0 / 2.0,
-                                rot,
-                                GRAY,
+                                (TANK_WIDTH + TANK_HEIGHT) / 4.0,
+                                mouse_angle,
+                                GREEN,
                             );
-                        }
+                        } // render all clients
 
                         for bullet in &tgs.bullets {
                             draw_circle(bullet.x, bullet.y, TANK_BULLET_RADIUS, GREEN);
-                        }
+                        } // render all bullets
                     }
                 }
 
