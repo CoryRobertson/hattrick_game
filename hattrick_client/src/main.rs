@@ -3,11 +3,12 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT};
-use hattrick_packets_lib::tank::{TANK_HEIGHT, TANK_WIDTH};
+use hattrick_packets_lib::tank::{TANK_BULLET_RADIUS, TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
 use hattrick_packets_lib::{
-    get_angle_from_point_to_point, get_angle_of_travel_degrees, round_number,
+    get_angle_from_point_to_point, get_angle_of_travel_degrees, round_number, GAME_HEIGHT,
+    GAME_WIDTH,
 };
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
@@ -121,6 +122,8 @@ async fn main() {
                     BLACK,
                 );
 
+                draw_rectangle(0.0, 0.0, GAME_WIDTH, GAME_HEIGHT, GRAY);
+
                 // get the new game state that was most recently received from the connection thread
                 let local_gs = { game_state.lock().unwrap().clone() };
 
@@ -223,7 +226,7 @@ async fn main() {
                             BLACK,
                         )
                     }
-                    GameType::TANK(_tgs) => {
+                    GameType::TANK(tgs) => {
                         for client in &local_gs.client_list {
                             let cx = client.1.tank_client_state.tank_x;
                             let cy = client.1.tank_client_state.tank_y;
@@ -242,8 +245,9 @@ async fn main() {
                             #[cfg(debug_assertions)]
                             draw_text(
                                 format!(
-                                    "DEBUG TURRET ANGLE: {}, CLIENT STATE: {:?}",
-                                    mouse_angle, client.1.tank_client_state
+                                    "DEBUG Tank speed: {},{}",
+                                    client.1.tank_client_state.tank_x_vel,
+                                    client.1.tank_client_state.tank_y_vel
                                 )
                                 .as_str(),
                                 cx,
@@ -264,6 +268,10 @@ async fn main() {
                                 rot,
                                 GRAY,
                             );
+                        }
+
+                        for bullet in &tgs.bullets {
+                            draw_circle(bullet.x, bullet.y, TANK_BULLET_RADIUS, GREEN);
                         }
                     }
                 }

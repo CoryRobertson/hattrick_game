@@ -7,6 +7,9 @@ pub mod pong;
 pub mod tank;
 pub mod team;
 
+pub static GAME_WIDTH: f32 = 600.0;
+pub static GAME_HEIGHT: f32 = 600.0;
+
 /// Round a given number to a given number of digits.
 pub fn round_digits(num: &mut f32, digits: u32) {
     let multiple = (10.0 as f32).powi(digits as i32);
@@ -42,6 +45,13 @@ pub fn get_angle_of_travel_degrees(x: f32, y: f32, xvel: f32, yvel: f32) -> f32 
     let next_x = x + xvel;
     let next_y = y + yvel;
     (next_y - y).atan2(next_x - x).to_degrees()
+}
+
+/// Returns the distance between two points
+pub fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let g1 = (x2 - x1).powi(2);
+    let g2 = (y2 - y1).powi(2);
+    (g1 + g2).sqrt()
 }
 
 #[cfg(test)]

@@ -7,12 +7,13 @@ use hattrick_packets_lib::pong::{
     get_pong_paddle_width, PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_BALL_VEL_ADD_MAX,
     PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
-use hattrick_packets_lib::round_digits;
 use hattrick_packets_lib::tank::{
-    TankClientState, TankGameState, TANK_ACCEL, TANK_MAX_SPEED, TANK_TURN_SPEED,
+    TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
+    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN, TANK_TURN_SPEED,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
+use hattrick_packets_lib::{get_angle_from_point_to_point, round_digits, GAME_HEIGHT, GAME_WIDTH};
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
@@ -106,12 +107,12 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 gs.ball_xvel *= -1.0;
                             }
 
-                            if gs.ball_x > 800.0 - ball_radius {
+                            if gs.ball_x > GAME_WIDTH - ball_radius {
                                 // right screen wall
                                 gs.ball_xvel *= -1.0;
                             }
 
-                            if gs.ball_y > 600.0 - ball_radius {
+                            if gs.ball_y > GAME_HEIGHT - ball_radius {
                                 // FIXME: currently a bug where sometimes two points are scored for red team, unsure as to why yet. Hard to reproduce at the moment, also might happen with the other point score check, not enough testing.
                                 // ball hits bottom screen wall
                                 let default_xvel = PongGameState::default().ball_xvel;
@@ -209,12 +210,12 @@ fn spawn_game_thread() -> JoinHandle<()> {
                         }
                     }
 
-                    TANK(mut _tgs) => {
+                    TANK(mut tgs) => {
                         let mut client_list = copy_gs.client_list.clone();
+
                         for mut client in &mut client_list {
                             let client_key_state = &client.1.key_state;
-
-                            let change_x = {
+                            let x_ratio = {
                                 let rad = client.1.tank_client_state.rotation.to_radians();
                                 if rad.cos().is_nan() {
                                     0.0
@@ -223,7 +224,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 }
                             };
 
-                            let change_y = {
+                            let y_ratio = {
                                 let rad = client.1.tank_client_state.rotation.to_radians();
                                 if rad.sin().is_nan() {
                                     0.0
@@ -237,62 +238,120 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             .sqrt();
 
                             if client_key_state.d_key {
-                                //client.1.tank_client_state.tank_x += TANK_MOVE_SPEED;
-                                client.1.tank_client_state.rotation += TANK_TURN_SPEED;
+                                client.1.tank_client_state.rotation += TANK_TURN_SPEED * difference;
                             }
                             if client_key_state.a_key {
-                                //client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED;
-                                client.1.tank_client_state.rotation -= TANK_TURN_SPEED;
+                                client.1.tank_client_state.rotation -= TANK_TURN_SPEED * difference;
                             }
                             if client_key_state.w_key {
-                                //client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED;
-
-                                // client.1.tank_client_state.tank_x += TANK_MOVE_SPEED * change_x;
-                                //
-                                // client.1.tank_client_state.tank_y -= TANK_MOVE_SPEED * change_y;
                                 if current_speed < TANK_MAX_SPEED {
-                                    client.1.tank_client_state.tank_x_vel += TANK_ACCEL;
-                                    client.1.tank_client_state.tank_y_vel += TANK_ACCEL;
+                                    client.1.tank_client_state.tank_x_vel +=
+                                        TANK_ACCEL * difference;
+                                    client.1.tank_client_state.tank_y_vel +=
+                                        TANK_ACCEL * difference;
                                 }
                             }
                             if client_key_state.s_key {
-                                //client.1.tank_client_state.tank_y += TANK_MOVE_SPEED;
-
-                                // client.1.tank_client_state.tank_x -= TANK_MOVE_SPEED * change_x;
-                                //
-                                // client.1.tank_client_state.tank_y += TANK_MOVE_SPEED * change_y;
-
-                                if current_speed > -TANK_MAX_SPEED {
-                                    client.1.tank_client_state.tank_x_vel -= TANK_ACCEL;
-                                    client.1.tank_client_state.tank_y_vel -= TANK_ACCEL;
+                                if -current_speed > -TANK_MAX_SPEED {
+                                    client.1.tank_client_state.tank_x_vel -=
+                                        TANK_ACCEL * difference;
+                                    client.1.tank_client_state.tank_y_vel -=
+                                        TANK_ACCEL * difference;
                                 }
                             }
 
-                            client.1.tank_client_state.tank_x_vel *= 0.9;
-                            client.1.tank_client_state.tank_y_vel *= 0.9;
+                            let last_shot_diff = SystemTime::now()
+                                .duration_since(client.1.tank_client_state.last_shot_time)
+                                .unwrap()
+                                .as_secs_f64();
+
+                            if client_key_state.space_bar && last_shot_diff > TANK_SHOT_COOLDOWN {
+                                client.1.tank_client_state.last_shot_time = SystemTime::now();
+                                let tx = client.1.tank_client_state.tank_x;
+                                let ty = client.1.tank_client_state.tank_y;
+
+                                let bullet_xvel = {
+                                    let deg =
+                                        get_angle_from_point_to_point((tx, ty), client.1.mouse_pos)
+                                            .to_radians();
+                                    if deg.cos().is_nan() {
+                                        0.0
+                                    } else {
+                                        deg.cos() * TANK_BULLET_VELOCITY
+                                    }
+                                };
+
+                                let bullet_yvel = {
+                                    let deg =
+                                        get_angle_from_point_to_point((tx, ty), client.1.mouse_pos)
+                                            .to_radians();
+                                    if deg.sin().is_nan() {
+                                        0.0
+                                    } else {
+                                        deg.sin() * TANK_BULLET_VELOCITY
+                                    }
+                                };
+
+                                tgs.bullets.push(TankBullet {
+                                    x: tx,
+                                    y: ty,
+                                    x_vel: bullet_xvel,
+                                    y_vel: bullet_yvel,
+                                    bounce_count: 0,
+                                    team: client.1.team_id.clone(),
+                                })
+                            } // shoot bullet from a tank
+
+                            client.1.tank_client_state.tank_x_vel *= TANK_FRICTION;
+                            client.1.tank_client_state.tank_y_vel *= TANK_FRICTION;
 
                             if client.1.tank_client_state.tank_x_vel.abs() < 0.05
-                                || client.1.tank_client_state.tank_y_vel.abs() < 0.05
+                                && client.1.tank_client_state.tank_y_vel.abs() < 0.05
                             {
                                 client.1.tank_client_state.tank_x_vel = 0.0;
                                 client.1.tank_client_state.tank_y_vel = 0.0;
-                            }
+                            } // if velocity is very small, make it 0 so there is no slow drifting for tanks.
 
                             client.1.tank_client_state.tank_x +=
-                                client.1.tank_client_state.tank_x_vel * change_x;
+                                (client.1.tank_client_state.tank_x_vel * difference) * x_ratio;
                             client.1.tank_client_state.tank_y +=
-                                client.1.tank_client_state.tank_y_vel * change_y;
+                                (client.1.tank_client_state.tank_y_vel * difference) * y_ratio;
+
+                            // TODO: check if bullets are colliding with tanks here.
 
                             round_digits(&mut client.1.tank_client_state.tank_x_vel, 4);
                             round_digits(&mut client.1.tank_client_state.tank_y_vel, 4);
                             round_digits(&mut client.1.tank_client_state.tank_x, 4);
                             round_digits(&mut client.1.tank_client_state.tank_y, 4);
+                        } // input handling for clients
 
-                            // println!("cx: {}, cy: {}", change_x, change_y);
-                        }
+                        for mut bullet in &mut tgs.bullets {
+                            if bullet.x >= GAME_WIDTH - TANK_BULLET_RADIUS
+                                || bullet.x <= 0.0 + TANK_BULLET_RADIUS
+                            {
+                                bullet.x_vel *= -1.0;
+                                bullet.bounce_count += 1;
+                            }
+                            if bullet.y >= GAME_HEIGHT - TANK_BULLET_RADIUS
+                                || bullet.y <= 0.0 + TANK_BULLET_RADIUS
+                            {
+                                bullet.y_vel *= -1.0;
+                                bullet.bounce_count += 1;
+                            }
+                            bullet.x += bullet.x_vel * difference;
+                            bullet.y += bullet.y_vel * difference;
+                        } // do physics for bullets
+
+                        for index in 0..tgs.bullets.len() {
+                            if let Some(bullet) = tgs.bullets.get(index) {
+                                if bullet.bounce_count >= TANK_BULLET_BOUNCE_COUNT_MAX {
+                                    tgs.bullets.remove(index);
+                                }
+                            }
+                        } // remove all bullets that have more than the maximum allowed bounces for bullets.
 
                         unsafe {
-                            STATIC_GAME_STATE.game_type = TANK(_tgs);
+                            STATIC_GAME_STATE.game_type = TANK(tgs);
                             STATIC_GAME_STATE.client_list = client_list;
                             STATIC_GAME_STATE.time = SystemTime::now();
                         }
@@ -403,15 +462,15 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                 Some(client) => client.clone(),
                             };
 
-                            let prev_client_x = prev_client.tank_client_state.tank_x;
-
-                            let prev_client_y = prev_client.tank_client_state.tank_y;
-
-                            let prev_client_rot = prev_client.tank_client_state.rotation;
-
-                            let prev_client_xvel = prev_client.tank_client_state.tank_x_vel;
-
-                            let prev_client_yvel = prev_client.tank_client_state.tank_y_vel;
+                            // let prev_client_x = prev_client.tank_client_state.tank_x;
+                            //
+                            // let prev_client_y = prev_client.tank_client_state.tank_y;
+                            //
+                            // let prev_client_rot = prev_client.tank_client_state.rotation;
+                            //
+                            // let prev_client_xvel = prev_client.tank_client_state.tank_x_vel;
+                            //
+                            // let prev_client_yvel = prev_client.tank_client_state.tank_y_vel;
 
                             let client_state: ClientState = ClientState {
                                 // create the new client state from the information we have from the client info.
@@ -420,13 +479,7 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                 mouse_pos: c.mouse_pos,
                                 key_state: c.key_state.clone(),
                                 pong_client_state: PongClientState::default(),
-                                tank_client_state: TankClientState {
-                                    rotation: prev_client_rot,
-                                    tank_x: prev_client_x,
-                                    tank_y: prev_client_y,
-                                    tank_x_vel: prev_client_xvel,
-                                    tank_y_vel: prev_client_yvel,
-                                },
+                                tank_client_state: prev_client.tank_client_state,
                             };
 
                             unsafe {
@@ -451,10 +504,4 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             }
         }
     })
-}
-
-fn _distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let g1 = (x2 - x1).powi(2);
-    let g2 = (y2 - y1).powi(2);
-    (g1 + g2).sqrt()
 }
