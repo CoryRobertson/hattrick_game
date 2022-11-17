@@ -8,13 +8,13 @@ use hattrick_packets_lib::pong::{
     PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
 use hattrick_packets_lib::tank::{
-    TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
-    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
-    TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
+    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
+    TANK_SHOT_COOLDOWN, TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
-use hattrick_packets_lib::{round_digits, two_point_angle, GAME_HEIGHT, GAME_WIDTH};
+use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_HEIGHT, GAME_WIDTH};
 use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
@@ -315,8 +315,6 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             client.1.tank_client_state.tank_y +=
                                 (client.1.tank_client_state.tank_y_vel * difference) * y_ratio;
 
-                            // TODO: check if bullets are colliding with tanks here.
-
                             round_digits(&mut client.1.tank_client_state.tank_x_vel, 4);
                             round_digits(&mut client.1.tank_client_state.tank_y_vel, 4);
                             round_digits(&mut client.1.tank_client_state.tank_x, 4);
@@ -347,6 +345,31 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 }
                             }
                         } // remove all bullets that have more than the maximum allowed bounces for bullets.
+
+                        // bad practice cloning happening here.
+                        let copy_client_list = client_list.clone();
+                        let copy_bullets_list = tgs.bullets.clone();
+                        for index in 0..copy_bullets_list.len() {
+                            if let Some(bullet) = copy_bullets_list.get(index) {
+                                for client in &mut client_list {
+                                    if distance(
+                                        bullet.x,
+                                        bullet.y,
+                                        client.1.tank_client_state.tank_x,
+                                        client.1.tank_client_state.tank_y,
+                                    ) < TANK_BULLET_RADIUS + (TANK_WIDTH + TANK_HEIGHT) / 2.0
+                                        && bullet.team != client.1.team_id
+                                    {
+                                        respawn_tank(
+                                            &mut client.1.tank_client_state,
+                                            &copy_bullets_list,
+                                            &copy_client_list,
+                                        );
+                                        tgs.bullets.remove(index);
+                                    }
+                                }
+                            }
+                        } // check for bullet collision on clients, and remove bullet if collision occurs.
 
                         unsafe {
                             STATIC_GAME_STATE.game_type = TANK(tgs);
@@ -414,6 +437,12 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     Ok(c) => {
                         // here we can decide if we want to do anything with the client state given if it is different enough,
                         // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
+
+                        let prev_client = match local_gs.client_list.get(&*uuid) {
+                            None => ClientState::default(),
+                            Some(client) => client.clone(),
+                        };
+
                         match &local_gs.game_type {
                             // depending on the game type, handle the clients info differently.
                             PONG(_pgs) => {
@@ -430,19 +459,14 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                 let client_state: ClientState = ClientState {
                                     // create the new client state from the information we have from the client info.
                                     time: c.time,
-                                    // pos: (client_x, client_y),
                                     team_id: c.team_id,
                                     mouse_pos: c.mouse_pos,
                                     key_state: c.key_state,
-                                    // game_type_info: GameTypeClient::PONG(PongClientState {
-                                    //     paddle_x: client_x,
-                                    //     paddle_y: client_y,
-                                    // }),
                                     pong_client_state: PongClientState {
                                         paddle_x: client_x,
                                         paddle_y: client_y,
                                     },
-                                    tank_client_state: Default::default(),
+                                    tank_client_state: prev_client.tank_client_state,
                                 };
 
                                 unsafe {
@@ -453,18 +477,13 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                             }
 
                             TANK(_tgs) => {
-                                let prev_client = match local_gs.client_list.get(&*uuid) {
-                                    None => ClientState::default(),
-                                    Some(client) => client.clone(),
-                                };
-
                                 let client_state: ClientState = ClientState {
                                     // create the new client state from the information we have from the client info.
                                     time: c.time,
                                     team_id: c.team_id,
                                     mouse_pos: c.mouse_pos,
                                     key_state: c.key_state.clone(),
-                                    pong_client_state: PongClientState::default(),
+                                    pong_client_state: prev_client.pong_client_state,
                                     tank_client_state: prev_client.tank_client_state,
                                 };
 

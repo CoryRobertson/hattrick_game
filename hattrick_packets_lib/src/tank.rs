@@ -1,5 +1,7 @@
+use crate::clientstate::ClientState;
 use crate::team::Team;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::SystemTime;
 
 pub static TANK_MAX_SPEED: f32 = 60.0;
@@ -65,4 +67,15 @@ impl Default for TankClientState {
             last_shot_time: SystemTime::now(),
         }
     }
+}
+
+/// respawn_tank takes in a mutable TankClientState, and
+pub fn respawn_tank(
+    tank_client_state: &mut TankClientState,
+    _bullets: &Vec<TankBullet>,
+    _clients: &HashMap<String, ClientState>,
+) {
+    // TODO: write function that takes in list of all bullets, list of all clients, and finds a location furthest from all of them.
+    tank_client_state.tank_x = 0.0;
+    tank_client_state.tank_y = 0.0;
 }
