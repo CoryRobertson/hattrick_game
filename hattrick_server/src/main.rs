@@ -8,9 +8,9 @@ use hattrick_packets_lib::pong::{
     PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
-    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
-    TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
+    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
+    TANK_SHOT_COOLDOWN, TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -33,7 +33,7 @@ fn main() {
     let server = TcpListener::bind("0.0.0.0:8111").unwrap();
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    //game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
     let connect_game_state = game_state_rwl.clone();
     let connect_thread = thread::spawn(move || {
