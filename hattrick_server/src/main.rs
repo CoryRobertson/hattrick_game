@@ -24,6 +24,7 @@ use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
+/// Delay in milliseconds to wait between game loop, at the moment 1 seems to work just as good as anything lower than 16, but unsure for the most part.
 static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
 
 type GameStateRW = Arc<RwLock<GameState>>;
@@ -35,6 +36,7 @@ fn main() {
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
     game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
+    // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
     let connect_thread = thread::spawn(move || {
         for response in server.incoming() {
@@ -66,13 +68,14 @@ fn main() {
 /// This function spawns the game thread, that handles running the entire game server while reading the games state.
 fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut previous_time = SystemTime::now();
+        let mut previous_time = SystemTime::now(); // initialize the previous time with now.
+
         loop {
-            // let copy_gs = unsafe { STATIC_GAME_STATE.clone() };
             let copy_gs = {
                 let lock = game_state_rw.read().unwrap();
                 lock.clone()
-            };
+            }; // make a copy of the game state, so we can read it to make decisions for the game thread.
+
             let difference = {
                 let d = SystemTime::now()
                     .duration_since(previous_time)
@@ -200,12 +203,10 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         } // client loop for game state
 
                         {
-                            // STATIC_GAME_STATE.game_type = PONG(gs);
-                            // STATIC_GAME_STATE.time = SystemTime::now();
                             let mut lock = game_state_rw.write().unwrap();
                             lock.game_type = PONG(gs);
                             lock.time = SystemTime::now();
-                        }
+                        } // at the end of the game loop for pong, we add all the new data into the game state.
                     }
 
                     TANK(mut tgs) => {
@@ -257,7 +258,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
 
                             if client_key_state.space_bar && last_shot_diff > TANK_SHOT_COOLDOWN {
                                 client.1.tank_client_state.last_shot_time = SystemTime::now();
-                                println!("shot time: {:?}", last_shot_diff);
+                                // println!("shot time: {:?}", last_shot_diff);
 
                                 let tx = client.1.tank_client_state.tank_x;
                                 let ty = client.1.tank_client_state.tank_y;
@@ -323,10 +324,6 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             round_digits(&mut client.1.tank_client_state.tank_y, 4);
                         } // input handling for clients
 
-                        for c in &client_list {
-                            println!("{:?}", c.1.tank_client_state);
-                        }
-
                         for mut bullet in &mut tgs.bullets {
                             if bullet.x >= GAME_WIDTH - TANK_BULLET_RADIUS
                                 || bullet.x <= 0.0 + TANK_BULLET_RADIUS
@@ -378,20 +375,19 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         } // check for bullet collision on clients, and remove bullet if collision occurs.
 
                         {
-                            // STATIC_GAME_STATE.game_type = TANK(tgs);
-                            // STATIC_GAME_STATE.client_list = client_list;
-                            // STATIC_GAME_STATE.time = SystemTime::now();
                             let mut lock = game_state_rw.write().unwrap();
                             lock.game_type = TANK(tgs);
                             lock.client_list = client_list;
                             lock.time = SystemTime::now();
-                        }
+                        } // at the end of the game loop where game mechanics run, we now move all the new data into the game state for the server.
                     }
                 }
-            }
-            previous_time = SystemTime::now();
-            sleep(Duration::from_millis(GAME_LOOP_THREAD_DELAY_MS)); // maybe remove this? at the moment unsure
-        }
+            } // only run the game loop if there are clients connected.
+
+            previous_time = SystemTime::now(); // constantly update game system time for previous time. Useful for calculating the difference in time.
+
+            sleep(Duration::from_millis(GAME_LOOP_THREAD_DELAY_MS)); // maybe remove this? at the moment unsure.
+        } // loop to constantly update the game thread, see function comment for more info.
     })
 }
 
@@ -401,27 +397,20 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
 fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut client_stream = stream;
-        client_stream
-            .set_write_timeout(Option::from(Duration::from_secs(5)))
-            .unwrap();
-        client_stream
-            .set_read_timeout(Option::from(Duration::from_secs(5)))
-            .unwrap();
-        let uuid = Uuid::new_v4().to_string();
+
         {
-            // STATIC_GAME_STATE.client_list.insert(
-            //     uuid.to_string(),
-            //     ClientState {
-            //         time: SystemTime::now(),
-            //         // pos: (0.0, 0.0),
-            //         team_id: BlueTeam,
-            //         mouse_pos: (0.0, 0.0),
-            //         key_state: KeyState::default(),
-            //
-            //         pong_client_state: Default::default(),
-            //         tank_client_state: Default::default(),
-            //     },
-            // );
+            client_stream
+                .set_write_timeout(Option::from(Duration::from_secs(5)))
+                .unwrap();
+
+            client_stream
+                .set_read_timeout(Option::from(Duration::from_secs(5)))
+                .unwrap();
+        } // set the read and write timeout for the client.
+
+        let uuid = Uuid::new_v4().to_string();
+
+        {
             let mut lock = game_state_rw.write().unwrap();
             lock.client_list.insert(
                 uuid.to_string(),
@@ -436,17 +425,15 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                     tank_client_state: Default::default(),
                 },
             );
-        }
+        } // block to add new client to client list with all default data.
 
         loop {
             // TODO: write logic that takes a timestamp when ever a write is successfully sent to a client, and if the last successful write happened more than 5 seconds ago, we can drop the client, otherwise keep waiting on them.
             //  alternatively, let a specific number of packets be dropped before dropping a client.
-            // let local_gs = unsafe { &*STATIC_GAME_STATE };
             let local_gs = {
                 let lock = game_state_rw.read().unwrap();
                 lock.clone()
-            };
-            // FIXME: there is a bug here relating to the lock.
+            }; // lock read of local gs gets locked once we need to loop through the client handler once again.
             if let Ok(ser) = serde_json::to_string(&local_gs) {
                 let write = client_stream.write(ser.as_bytes());
                 let flush = client_stream.flush();
@@ -468,6 +455,10 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                         // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
 
                         let mut local_gs = game_state_rw.write().unwrap();
+                        /*
+                        Lock the game state once we have received all data from the client,
+                        at this point, all we need to do is manage it, so we can lock the entire game state now.
+                        */
 
                         let prev_client = match local_gs.client_list.get(&*uuid) {
                             None => ClientState::default(),
@@ -501,12 +492,8 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 };
 
                                 {
-                                    // STATIC_GAME_STATE
-                                    //     .client_list
-                                    //     .insert(uuid.to_string(), client_state)
-                                    // let mut lock = game_state_rw.write().unwrap();
                                     local_gs.client_list.insert(uuid.to_string(), client_state);
-                                };
+                                }
                             }
 
                             TANK(_tgs) => {
@@ -521,9 +508,6 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 };
 
                                 {
-                                    // STATIC_GAME_STATE
-                                    //     .client_list
-                                    //     .insert(uuid.to_string(), client_state);
                                     local_gs.client_list.insert(uuid.to_string(), client_state);
                                 }
                             }
@@ -532,7 +516,6 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                     Err(e) => {
                         println!("client disconnected: {}", e);
                         {
-                            // STATIC_GAME_STATE.client_list.remove(&*uuid)
                             let mut lock = game_state_rw.write().unwrap();
                             lock.client_list.remove(&*uuid);
                         };
@@ -550,6 +533,6 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                     break;
                 }
             } // only even attempt to make a packet to send to the client if we successfully serialize it, this can fail when the unsafe copy of STATIC_GAME_STATE is corrupted.
-        }
+        } // loop that constantly requests data from the client, also replicates the current game state to the client, and changes the clients state to their current input if they have any.
     })
 }
