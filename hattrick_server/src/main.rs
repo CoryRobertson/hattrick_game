@@ -19,6 +19,7 @@ use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
@@ -27,23 +28,27 @@ use uuid::Uuid;
 // super bad practice to do this, probably move away from this eventually.
 // if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
 // following this, we could use a function that detects how different the client state is from the current ClientState and only update it if the difference is high enough.
-static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
-    time: SystemTime::UNIX_EPOCH,
-    game_type: PONG(PongGameState::default()),
-    client_list: Default::default(),
-});
+// static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
+//     time: SystemTime::UNIX_EPOCH,
+//     game_type: PONG(PongGameState::default()),
+//     client_list: Default::default(),
+// });
 
 static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
+
+type GameStateRW = Arc<RwLock<GameState>>;
 
 fn main() {
     println!("I am the server!");
     let server = TcpListener::bind("0.0.0.0:8111").unwrap();
+    let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
+    //game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
-    unsafe {
-        STATIC_GAME_STATE.game_type = TANK(TankGameState::default());
-    }
-
+    // unsafe {
+    //     STATIC_GAME_STATE.game_type = TANK(TankGameState::default());
+    // }
+    let connect_game_state = game_state_rwl.clone();
     let connect_thread = thread::spawn(move || {
         for response in server.incoming() {
             for i in 0..client_threads.len() {
@@ -58,25 +63,29 @@ fn main() {
             }
 
             if let Ok(r) = response {
-                client_threads.push(handle_client(r));
+                client_threads.push(handle_client(r,Arc::clone(&connect_game_state)));
             }
 
             println!("Client count: {}", client_threads.len());
         }
     });
 
-    let game_thread = spawn_game_thread();
+    let game_thread = spawn_game_thread(Arc::clone(&game_state_rwl));
 
     let _ = connect_thread.join();
     let _ = game_thread.join();
 }
 
 /// This function spawns the game thread, that handles running the entire game server while reading the games state.
-fn spawn_game_thread() -> JoinHandle<()> {
-    thread::spawn(|| {
+fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
+    thread::spawn(move || {
         let mut previous_time = SystemTime::now();
         loop {
-            let copy_gs = unsafe { STATIC_GAME_STATE.clone() };
+            // let copy_gs = unsafe { STATIC_GAME_STATE.clone() };
+            let copy_gs = {
+                let lock = game_state_rw.read().unwrap();
+                lock.clone()
+            };
             let difference = {
                 let d = SystemTime::now()
                     .duration_since(previous_time)
@@ -202,9 +211,13 @@ fn spawn_game_thread() -> JoinHandle<()> {
                                 );
                             } // bounce checks for ball on paddles of clients
                         } // client loop for game state
-                        unsafe {
-                            STATIC_GAME_STATE.game_type = PONG(gs);
-                            STATIC_GAME_STATE.time = SystemTime::now();
+
+                        {
+                            // STATIC_GAME_STATE.game_type = PONG(gs);
+                            // STATIC_GAME_STATE.time = SystemTime::now();
+                            let mut lock = game_state_rw.write().unwrap();
+                            lock.game_type = PONG(gs);
+                            lock.time = SystemTime::now();
                         }
                     }
 
@@ -257,6 +270,8 @@ fn spawn_game_thread() -> JoinHandle<()> {
 
                             if client_key_state.space_bar && last_shot_diff > TANK_SHOT_COOLDOWN {
                                 client.1.tank_client_state.last_shot_time = SystemTime::now();
+                                println!("shot time: {:?}", last_shot_diff);
+
                                 let tx = client.1.tank_client_state.tank_x;
                                 let ty = client.1.tank_client_state.tank_y;
 
@@ -321,6 +336,10 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             round_digits(&mut client.1.tank_client_state.tank_y, 4);
                         } // input handling for clients
 
+                        for c in &client_list {
+                            println!("{:?}",c.1.tank_client_state);
+                        }
+
                         for mut bullet in &mut tgs.bullets {
                             if bullet.x >= GAME_WIDTH - TANK_BULLET_RADIUS
                                 || bullet.x <= 0.0 + TANK_BULLET_RADIUS
@@ -371,10 +390,14 @@ fn spawn_game_thread() -> JoinHandle<()> {
                             }
                         } // check for bullet collision on clients, and remove bullet if collision occurs.
 
-                        unsafe {
-                            STATIC_GAME_STATE.game_type = TANK(tgs);
-                            STATIC_GAME_STATE.client_list = client_list;
-                            STATIC_GAME_STATE.time = SystemTime::now();
+                        {
+                            // STATIC_GAME_STATE.game_type = TANK(tgs);
+                            // STATIC_GAME_STATE.client_list = client_list;
+                            // STATIC_GAME_STATE.time = SystemTime::now();
+                            let mut lock = game_state_rw.write().unwrap();
+                            lock.game_type = TANK(tgs);
+                            lock.client_list = client_list;
+                            lock.time = SystemTime::now();
                         }
                     }
                 }
@@ -388,7 +411,7 @@ fn spawn_game_thread() -> JoinHandle<()> {
 /// This function handles a given client, it spawns a thread that will relay the game state to them, as well as take in their client info and insert that info into the game states client list under their uuid.
 /// Each client is denoted by a random gen uuid.
 /// The thread is closed and their client state is removed when they either disconnect, or the thread closes.
-fn handle_client(stream: TcpStream) -> JoinHandle<()> {
+fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut client_stream = stream;
         client_stream
@@ -398,8 +421,22 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
             .set_read_timeout(Option::from(Duration::from_secs(5)))
             .unwrap();
         let uuid = Uuid::new_v4().to_string();
-        unsafe {
-            STATIC_GAME_STATE.client_list.insert(
+        {
+            // STATIC_GAME_STATE.client_list.insert(
+            //     uuid.to_string(),
+            //     ClientState {
+            //         time: SystemTime::now(),
+            //         // pos: (0.0, 0.0),
+            //         team_id: BlueTeam,
+            //         mouse_pos: (0.0, 0.0),
+            //         key_state: KeyState::default(),
+            //
+            //         pong_client_state: Default::default(),
+            //         tank_client_state: Default::default(),
+            //     },
+            // );
+            let mut lock = game_state_rw.write().unwrap();
+            lock.client_list.insert(
                 uuid.to_string(),
                 ClientState {
                     time: SystemTime::now(),
@@ -417,8 +454,13 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
         loop {
             // TODO: write logic that takes a timestamp when ever a write is successfully sent to a client, and if the last successful write happened more than 5 seconds ago, we can drop the client, otherwise keep waiting on them.
             //  alternatively, let a specific number of packets be dropped before dropping a client.
-            let local_gs = unsafe { &*STATIC_GAME_STATE };
-            if let Ok(ser) = serde_json::to_string(local_gs) {
+            // let local_gs = unsafe { &*STATIC_GAME_STATE };
+            let local_gs = {
+                let lock = game_state_rw.read().unwrap();
+                lock.clone()
+            };
+            // FIXME: there is a bug here relating to the lock.
+            if let Ok(ser) = serde_json::to_string(&local_gs) {
                 let write = client_stream.write(ser.as_bytes());
                 let flush = client_stream.flush();
                 let mut buf: [u8; 8192] = [0; 8192];
@@ -437,6 +479,8 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                     Ok(c) => {
                         // here we can decide if we want to do anything with the client state given if it is different enough,
                         // this would allow us to only take changes if they are large enough, compressing how often we have to lock the game state, if we decide to be threadsafe.
+
+                        let mut local_gs = game_state_rw.write().unwrap();
 
                         let prev_client = match local_gs.client_list.get(&*uuid) {
                             None => ClientState::default(),
@@ -469,10 +513,12 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                     tank_client_state: prev_client.tank_client_state,
                                 };
 
-                                unsafe {
-                                    STATIC_GAME_STATE
-                                        .client_list
-                                        .insert(uuid.to_string(), client_state)
+                                {
+                                    // STATIC_GAME_STATE
+                                    //     .client_list
+                                    //     .insert(uuid.to_string(), client_state)
+                                    // let mut lock = game_state_rw.write().unwrap();
+                                    local_gs.client_list.insert(uuid.to_string(), client_state);
                                 };
                             }
 
@@ -487,24 +533,33 @@ fn handle_client(stream: TcpStream) -> JoinHandle<()> {
                                     tank_client_state: prev_client.tank_client_state,
                                 };
 
-                                unsafe {
-                                    STATIC_GAME_STATE
-                                        .client_list
-                                        .insert(uuid.to_string(), client_state);
+                                {
+                                    // STATIC_GAME_STATE
+                                    //     .client_list
+                                    //     .insert(uuid.to_string(), client_state);
+                                    local_gs.client_list.insert(uuid.to_string(), client_state);
                                 }
                             }
                         }
                     }
                     Err(e) => {
                         println!("client disconnected: {}", e);
-                        unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
+                        {
+                            // STATIC_GAME_STATE.client_list.remove(&*uuid)
+                            let mut lock = game_state_rw.write().unwrap();
+                            lock.client_list.remove(&*uuid);
+                        };
                         break;
                     }
                 };
 
                 if write.is_err() || flush.is_err() || read.is_err() {
                     println!("client disconnected: Socket closed");
-                    unsafe { STATIC_GAME_STATE.client_list.remove(&*uuid) };
+                    {
+                        // STATIC_GAME_STATE.client_list.remove(&*uuid)
+                        let mut lock = game_state_rw.write().unwrap();
+                        lock.client_list.remove(&*uuid);
+                    };
                     break;
                 }
             } // only even attempt to make a packet to send to the client if we successfully serialize it, this can fail when the unsafe copy of STATIC_GAME_STATE is corrupted.
