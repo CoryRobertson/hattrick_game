@@ -8,14 +8,13 @@ use hattrick_packets_lib::pong::{
     PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
-    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
-    TANK_SHOT_COOLDOWN, TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
+    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
+    TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
 use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_HEIGHT, GAME_WIDTH};
-use once_cell::unsync::Lazy;
 use rand::Rng;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -24,15 +23,6 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
-
-// super bad practice to do this, probably move away from this eventually.
-// if this ends up backfiring, use a RWLock instead, probably rather fruitful as multiple clients reading at same time is permitted. once a client needs to make a change to their ClientState, they can upgrade to a write lock on the rwlock
-// following this, we could use a function that detects how different the client state is from the current ClientState and only update it if the difference is high enough.
-// static mut STATIC_GAME_STATE: Lazy<GameState> = Lazy::new(|| GameState {
-//     time: SystemTime::UNIX_EPOCH,
-//     game_type: PONG(PongGameState::default()),
-//     client_list: Default::default(),
-// });
 
 static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
 
@@ -45,9 +35,6 @@ fn main() {
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
     //game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
-    // unsafe {
-    //     STATIC_GAME_STATE.game_type = TANK(TankGameState::default());
-    // }
     let connect_game_state = game_state_rwl.clone();
     let connect_thread = thread::spawn(move || {
         for response in server.incoming() {
@@ -63,7 +50,7 @@ fn main() {
             }
 
             if let Ok(r) = response {
-                client_threads.push(handle_client(r,Arc::clone(&connect_game_state)));
+                client_threads.push(handle_client(r, Arc::clone(&connect_game_state)));
             }
 
             println!("Client count: {}", client_threads.len());
@@ -337,7 +324,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         } // input handling for clients
 
                         for c in &client_list {
-                            println!("{:?}",c.1.tank_client_state);
+                            println!("{:?}", c.1.tank_client_state);
                         }
 
                         for mut bullet in &mut tgs.bullets {
