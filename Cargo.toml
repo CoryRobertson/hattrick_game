@@ -5,15 +5,15 @@ members = [
 "hattrick_packets_lib",
 ]
 
-[profile.dev]
-opt-level = 0
-lto = false
-
-[profile.release]
-overflow-checks = true
-opt-level = 3
-strip = true
-debug-assertions = false
-lto = true
+#[profile.dev]
+#opt-level = 0
+#lto = false
+#
+#[profile.release]
+#overflow-checks = true
+#opt-level = 3
+#strip = true
+#debug-assertions = false
+#lto = true
 
 

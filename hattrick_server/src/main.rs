@@ -23,6 +23,9 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
+use crate::ai::pong_ai::PongAI;
+
+mod ai;
 
 /// Delay in milliseconds to wait between game loop, at the moment 1 seems to work just as good as anything lower than 16, but unsure for the most part.
 static GAME_LOOP_THREAD_DELAY_MS: u64 = 1;
@@ -34,7 +37,7 @@ fn main() {
     let server = TcpListener::bind("0.0.0.0:8111").unwrap();
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -91,63 +94,63 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
             if !copy_gs.client_list.is_empty() {
                 // basic game logic goes here
                 match copy_gs.game_type {
-                    PONG(mut gs) => {
+                    PONG(mut pgs) => {
                         let ball_radius = PONG_BALL_RADIUS;
 
                         // blue team top of screen, red team bottom
                         // ball physics multiplied by delta time since last "frame" allows us to run game speed  independent of application run speed.
-                        gs.ball_x += (gs.ball_xvel * difference) * 16.0; // magic number multiplier
-                        gs.ball_y += (gs.ball_yvel * difference) * 16.0;
+                        pgs.ball_x += (pgs.ball_xvel * difference) * 16.0; // magic number multiplier
+                        pgs.ball_y += (pgs.ball_yvel * difference) * 16.0;
 
                         {
-                            if gs.ball_x < 0.0 + ball_radius {
+                            if pgs.ball_x < 0.0 + ball_radius {
                                 // left screen wall
-                                gs.ball_xvel *= -1.0;
+                                pgs.ball_xvel *= -1.0;
                             }
 
-                            if gs.ball_x > GAME_WIDTH - ball_radius {
+                            if pgs.ball_x > GAME_WIDTH - ball_radius {
                                 // right screen wall
-                                gs.ball_xvel *= -1.0;
+                                pgs.ball_xvel *= -1.0;
                             }
 
-                            if gs.ball_y > GAME_HEIGHT - ball_radius {
+                            if pgs.ball_y > GAME_HEIGHT - ball_radius {
                                 // FIXME: currently a bug where sometimes two points are scored for red team, unsure as to why yet. Hard to reproduce at the moment, also might happen with the other point score check, not enough testing.
                                 // ball hits bottom screen wall
                                 let default_xvel = PongGameState::default().ball_xvel;
                                 let default_yvel = PongGameState::default().ball_yvel;
-                                gs.ball_xvel = {
-                                    if gs.ball_xvel < 0.0 {
+                                pgs.ball_xvel = {
+                                    if pgs.ball_xvel < 0.0 {
                                         -default_xvel
                                     } else {
                                         default_xvel
                                     }
                                 };
-                                gs.ball_yvel = -default_yvel;
-                                gs.blue_points += 1;
+                                pgs.ball_yvel = -default_yvel;
+                                pgs.blue_points += 1;
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "blue points scored with ball xvel: {} and ball yvel: {}",
-                                    gs.ball_xvel, gs.ball_yvel
+                                    pgs.ball_xvel, pgs.ball_yvel
                                 );
                             }
 
-                            if gs.ball_y < 0.0 + ball_radius {
+                            if pgs.ball_y < 0.0 + ball_radius {
                                 // ball hits top screen wall
                                 let default_xvel = PongGameState::default().ball_xvel;
                                 let default_yvel = PongGameState::default().ball_yvel;
-                                gs.ball_xvel = {
-                                    if gs.ball_xvel < 0.0 {
+                                pgs.ball_xvel = {
+                                    if pgs.ball_xvel < 0.0 {
                                         -default_xvel
                                     } else {
                                         default_xvel
                                     }
                                 };
-                                gs.ball_yvel = default_yvel;
-                                gs.red_points += 1;
+                                pgs.ball_yvel = default_yvel;
+                                pgs.red_points += 1;
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "red points scored with ball xvel: {} and ball yvel: {}",
-                                    gs.ball_xvel, gs.ball_yvel
+                                    pgs.ball_xvel, pgs.ball_yvel
                                 );
                             }
                         } // bounce checks for ball on walls
@@ -168,43 +171,43 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             let cw = get_pong_paddle_width(&copy_gs.client_list, &cs.team_id); // client width
                             let ch = PONG_PADDLE_HEIGHT; // client height
 
-                            if (gs.ball_y > cy && gs.ball_y < cy + ch)
-                                && (gs.ball_x > cx && gs.ball_x < cx + cw)
+                            if (pgs.ball_y > cy && pgs.ball_y < cy + ch)
+                                && (pgs.ball_x > cx && pgs.ball_x < cx + cw)
                             {
                                 // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
                                 //FIXME: bug, when ball bounces off paddle, instead of inverting its velocity, it should set it so that it goes away from the paddle.
                                 //  This is because if the ball is inside the paddle it will internally bounce a lot, which is bad.
-                                gs.ball_yvel *= -1.0; // change the uppy downy velocity of the ball to its opposite
+                                pgs.ball_yvel *= -1.0; // change the uppy downy velocity of the ball to its opposite
                                 let rand_xvel_change: f32 = rand::thread_rng()
                                     .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new x velocity change for when a bounce needs to occur
                                 let rand_yvel_change: f32 = rand::thread_rng()
                                     .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new y velocity change for when a bounce needs to occur
 
-                                if gs.ball_xvel > 0.0 {
+                                if pgs.ball_xvel > 0.0 {
                                     // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
-                                    gs.ball_xvel += rand_xvel_change;
+                                    pgs.ball_xvel += rand_xvel_change;
                                 } else {
-                                    gs.ball_xvel -= rand_xvel_change;
+                                    pgs.ball_xvel -= rand_xvel_change;
                                 }
 
-                                if gs.ball_yvel > 0.0 {
+                                if pgs.ball_yvel > 0.0 {
                                     // ditto from comment above
-                                    gs.ball_yvel += rand_yvel_change;
+                                    pgs.ball_yvel += rand_yvel_change;
                                 } else {
-                                    gs.ball_yvel -= rand_yvel_change;
+                                    pgs.ball_yvel -= rand_yvel_change;
                                 }
 
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "bounced with: new xvel ({}), new yvel ({}): {} {}",
-                                    rand_xvel_change, rand_yvel_change, gs.ball_xvel, gs.ball_yvel
+                                    rand_xvel_change, rand_yvel_change, pgs.ball_xvel, pgs.ball_yvel
                                 );
                             } // bounce checks for ball on paddles of clients
                         } // client loop for game state
 
                         {
                             let mut lock = game_state_rw.write().unwrap();
-                            lock.game_type = PONG(gs);
+                            lock.game_type = PONG(pgs);
                             lock.time = SystemTime::now();
                         } // at the end of the game loop for pong, we add all the new data into the game state.
                     }
