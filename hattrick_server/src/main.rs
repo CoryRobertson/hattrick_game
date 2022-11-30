@@ -1,3 +1,4 @@
+use crate::ai::game_ai::spawn_ai_thread;
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
@@ -8,9 +9,9 @@ use hattrick_packets_lib::pong::{
     PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
-    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
-    TANK_SHOT_COOLDOWN, TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
+    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
+    TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -18,12 +19,11 @@ use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_HEIGHT,
 use rand::Rng;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
-use crate::ai::pong_ai::PongAI;
 
 mod ai;
 
@@ -36,6 +36,7 @@ fn main() {
     println!("I am the server!");
     let server = TcpListener::bind("0.0.0.0:8111").unwrap();
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
+    let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
     // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
@@ -64,8 +65,38 @@ fn main() {
 
     let game_thread = spawn_game_thread(Arc::clone(&game_state_rwl));
 
+    sleep(Duration::from_secs(2));
+
+    let mut ai_list: Vec<JoinHandle<()>> = vec![];
+
+    for a in 0..2 {
+        let ai_name = format!("ai{}", a);
+        let team = {
+            if a % 2 == 0 {
+                RedTeam
+            } else {
+                BlueTeam
+            }
+        };
+        ai_list.push(spawn_ai_thread(
+            Arc::clone(&game_state_rwl),
+            Arc::clone(&ai_running),
+            team,
+            ai_name,
+        ));
+    }
+
+    // let ai1 = spawn_ai_thread(Arc::clone(&game_state_rwl),Arc::clone(&ai_running),RedTeam, "ai1".to_string());
+    // let ai2 = spawn_ai_thread(Arc::clone(&game_state_rwl),Arc::clone(&ai_running),RedTeam, "ai2".to_string());
+
     let _ = connect_thread.join();
     let _ = game_thread.join();
+
+    *ai_running.lock().unwrap() = false; // stop ai after game thread has concluded
+    for ai in ai_list {
+        let _ = ai.join();
+    }
+    // let _ = ai1.join();
 }
 
 /// This function spawns the game thread, that handles running the entire game server while reading the games state.
@@ -78,7 +109,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                 let lock = game_state_rw.read().unwrap();
                 lock.clone()
             }; // make a copy of the game state, so we can read it to make decisions for the game thread.
-
+            println!("player count: {:?}", copy_gs.client_list);
             let difference = {
                 let d = SystemTime::now()
                     .duration_since(previous_time)
@@ -200,7 +231,10 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "bounced with: new xvel ({}), new yvel ({}): {} {}",
-                                    rand_xvel_change, rand_yvel_change, pgs.ball_xvel, pgs.ball_yvel
+                                    rand_xvel_change,
+                                    rand_yvel_change,
+                                    pgs.ball_xvel,
+                                    pgs.ball_yvel
                                 );
                             } // bounce checks for ball on paddles of clients
                         } // client loop for game state
