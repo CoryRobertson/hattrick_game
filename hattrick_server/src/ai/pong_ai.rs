@@ -13,7 +13,7 @@ pub fn get_pong_state_for_ai(
     // paddle heights based on team
     // BlueTeam => 10.0,
     // RedTeam => 550.0,
-    return {
+    {
         let paddle_y = {
             match &team_id {
                 Team::RedTeam => 550.0,
@@ -26,7 +26,8 @@ pub fn get_pong_state_for_ai(
             _ => -1.0, // only get a ball height if we are playing pong
         };
 
-        let pcs1 = PongClientState {
+        
+        PongClientState {
             paddle_x: {
                 // distance at which the ai stops handling the ball perfectly, pretty much a difficulty modifier?
                 if (ball_height - paddle_y).abs() < 100.0 {
@@ -36,7 +37,6 @@ pub fn get_pong_state_for_ai(
                 }
             },
             paddle_y,
-        };
-        pcs1
-    };
+        }
+    }
 }

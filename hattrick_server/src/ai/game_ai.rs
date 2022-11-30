@@ -43,9 +43,9 @@ pub fn spawn_ai_thread(
                         GameType::PONG(pgs) => pgs.ball_x,
                         GameType::TANK(_) => 0.0,
                     };
-                    let out = (x, 0.0);
+                    
 
-                    out
+                    (x, 0.0)
                 },
                 team_id: team_id.clone(),
                 key_state: KeyState {
@@ -82,7 +82,7 @@ pub fn spawn_ai_thread(
 
             sleep(Duration::from_millis(AI_TICK_DELAY_MS)); // ai tick rate, probably can be pretty slow
 
-            if *running.lock().unwrap() == false { // stop ai if our running lock is off.
+            if !(*running.lock().unwrap()) { // stop ai if our running lock is off.
                 break;
             }
         }
