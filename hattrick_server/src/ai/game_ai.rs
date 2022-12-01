@@ -14,7 +14,7 @@ use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 
 /// Delay in milliseconds for how long to wait between ai ticks.
-static AI_TICK_DELAY_MS: u64 = 32;
+static AI_TICK_DELAY_MS: u64 = 8;
 
 /// This function takes in the game state arc mutex, the running state arc mutex, an ip address, and the team to connect to and joins the given ip game server.
 /// It will mutate the game state each frame by locking the mutex. To stop the connection thread, set the running state to false. This thread also concludes when connection is lost.
@@ -43,15 +43,13 @@ pub fn spawn_ai_thread(
                         GameType::PONG(pgs) => pgs.ball_x,
                         GameType::TANK(_) => 0.0,
                     };
-                    
-
                     (x, 0.0)
                 },
                 team_id: team_id.clone(),
                 key_state: KeyState {
                     w_key: false,
                     a_key: false,
-                    s_key: true,
+                    s_key: false,
                     d_key: false,
                     space_bar: false,
                 },
@@ -82,7 +80,8 @@ pub fn spawn_ai_thread(
 
             sleep(Duration::from_millis(AI_TICK_DELAY_MS)); // ai tick rate, probably can be pretty slow
 
-            if !(*running.lock().unwrap()) { // stop ai if our running lock is off.
+            if !(*running.lock().unwrap()) {
+                // stop ai if our running lock is off.
                 break;
             }
         }

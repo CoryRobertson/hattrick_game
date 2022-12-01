@@ -9,6 +9,10 @@ pub static PONG_PADDLE_HEIGHT: f32 = 10.0;
 pub static PONG_BALL_RADIUS: f32 = 15.0;
 pub static PONG_BALL_VEL_ADD_MAX: f32 = 5.0;
 pub static PONG_BALL_VEL_ADD_MIN: f32 = 0.1;
+pub static BLUE_TEAM_PADDLE_Y: f32 = 10.0;
+pub static RED_TEAM_PADDLE_Y: f32 = 550.0;
+
+// TODO: add paddle move speed, use this for players and ai alike.
 
 /// PongGameState is an example game type struct that holds all the data for the game mode, it should contain anything related to the game-type of its parent, in this case Pong.
 #[derive(Serialize, Deserialize, Debug, Clone)]

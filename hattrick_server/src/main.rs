@@ -5,8 +5,9 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
-    get_pong_paddle_width, PongClientState, PongGameState, PONG_BALL_RADIUS, PONG_BALL_VEL_ADD_MAX,
-    PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
+    get_pong_paddle_width, PongClientState, PongGameState, BLUE_TEAM_PADDLE_Y, PONG_BALL_RADIUS,
+    PONG_BALL_VEL_ADD_MAX, PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
+    RED_TEAM_PADDLE_Y,
 };
 use hattrick_packets_lib::tank::{
     respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
@@ -69,7 +70,7 @@ fn main() {
 
     let mut ai_list: Vec<JoinHandle<()>> = vec![];
 
-    for a in 0..2 {
+    for a in 0..1 {
         let ai_name = format!("ai{}", a);
         let team = {
             if a % 2 == 0 {
@@ -109,7 +110,6 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                 let lock = game_state_rw.read().unwrap();
                 lock.clone()
             }; // make a copy of the game state, so we can read it to make decisions for the game thread.
-            println!("player count: {:?}", copy_gs.client_list);
             let difference = {
                 let d = SystemTime::now()
                     .duration_since(previous_time)
@@ -508,11 +508,13 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 let client_y = {
                                     // set the clients y coordinate based on their team, top for blue, bottom for red
                                     match &c.team_id {
-                                        BlueTeam => 10.0,
-                                        RedTeam => 550.0,
+                                        BlueTeam => BLUE_TEAM_PADDLE_Y,
+                                        RedTeam => RED_TEAM_PADDLE_Y,
                                     }
                                 };
 
+                                // TODO: change this so we move the paddle closer to the client mouse pos over time, maybe we calc the distance we need to move, say 15.0 distance, and we have a move speed we choose to move towards it or not.
+                                //  See other todos for more details on this.
                                 let client_x = c.mouse_pos.0 - (PONG_PADDLE_WIDTH / 2.0); // the client renders the rectangle from its top left corner, so to center it, we subtract half the paddle width
 
                                 let client_state: ClientState = ClientState {

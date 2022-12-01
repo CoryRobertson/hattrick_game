@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 pub mod clientinfo;
 pub mod clientstate;
 pub mod gamestate;
@@ -14,6 +16,23 @@ pub static GAME_HEIGHT: f32 = 600.0;
 pub fn round_digits(num: &mut f32, digits: u32) {
     let multiple = 10.0_f32.powi(digits as i32);
     *num = (*num * multiple).round() / multiple;
+}
+
+// not really needed right now.
+// pub fn get_vector_magnitude(vector: (f32,f32)) -> f32 {
+//     (vector.0.powi(2) + vector.1.powi(2)).sqrt()
+// }
+
+pub trait Magnitude {
+    fn mag(&self) -> f32;
+}
+
+impl Magnitude for (f32, f32) {
+    fn mag(&self) -> f32 {
+        let v: (f32, f32) = *self.deref();
+
+        (v.0.powi(2) + v.1.powi(2)).sqrt()
+    }
 }
 
 /// Round a given number to a number of digits.
