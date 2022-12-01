@@ -55,11 +55,9 @@ fn main() {
                     }
                 }
             }
-
             if let Ok(r) = response {
                 client_threads.push(handle_client(r, Arc::clone(&connect_game_state)));
             }
-
             println!("Client count: {}", client_threads.len());
         }
     });
@@ -87,9 +85,6 @@ fn main() {
         ));
     }
 
-    // let ai1 = spawn_ai_thread(Arc::clone(&game_state_rwl),Arc::clone(&ai_running),RedTeam, "ai1".to_string());
-    // let ai2 = spawn_ai_thread(Arc::clone(&game_state_rwl),Arc::clone(&ai_running),RedTeam, "ai2".to_string());
-
     let _ = connect_thread.join();
     let _ = game_thread.join();
 
@@ -97,7 +92,6 @@ fn main() {
     for ai in ai_list {
         let _ = ai.join();
     }
-    // let _ = ai1.join();
 }
 
 /// This function spawns the game thread, that handles running the entire game server while reading the games state.

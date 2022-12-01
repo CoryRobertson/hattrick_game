@@ -7,6 +7,7 @@ use hattrick_packets_lib::pong::{
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::Magnitude;
 
+/// Multiplicative modifier applied to the ball speed to determine how close the ball gets to the paddle before the AI stops reacting.
 static REACTION_DISTANCE_MODIFIER: f32 = 2.0;
 
 pub fn get_pong_state_for_ai(
