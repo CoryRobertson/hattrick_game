@@ -25,6 +25,7 @@ use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
+use hattrick_packets_lib::team::Team;
 
 mod ai;
 
@@ -200,9 +201,14 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 && (pgs.ball_x > cx && pgs.ball_x < cx + cw)
                             {
                                 // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
-                                //FIXME: bug, when ball bounces off paddle, instead of inverting its velocity, it should set it so that it goes away from the paddle.
-                                //  This is because if the ball is inside the paddle it will internally bounce a lot, which is bad.
-                                pgs.ball_yvel *= -1.0; // change the uppy downy velocity of the ball to its opposite
+                                match &cs.team_id {
+                                    RedTeam => { // if client is red we make sure the yvel is set to a negative number.
+                                        pgs.ball_yvel = -(pgs.ball_yvel.abs());
+                                    }
+                                    BlueTeam => { // if the client is blue we set the yvel to a positive number.
+                                        pgs.ball_yvel = (pgs.ball_yvel.abs());
+                                    }
+                                }
                                 let rand_xvel_change: f32 = rand::thread_rng()
                                     .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new x velocity change for when a bounce needs to occur
                                 let rand_yvel_change: f32 = rand::thread_rng()

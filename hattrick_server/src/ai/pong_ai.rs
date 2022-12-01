@@ -1,9 +1,7 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType;
-use hattrick_packets_lib::pong::{
-    PongClientState, BLUE_TEAM_PADDLE_Y, PONG_PADDLE_WIDTH, RED_TEAM_PADDLE_Y,
-};
+use hattrick_packets_lib::pong::{PongClientState, BLUE_TEAM_PADDLE_Y, PONG_PADDLE_WIDTH, RED_TEAM_PADDLE_Y, get_pong_paddle_width};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::Magnitude;
 
@@ -55,7 +53,8 @@ pub fn get_pong_state_for_ai(
                 { // if the ball distance to the paddle is less than the reaction distance, OR the ball is above the top paddle OR below the bottom paddle.
                     previous_pcs.paddle_x // just hold the paddle position.
                 } else {
-                    client_packet.mouse_pos.0 - (PONG_PADDLE_WIDTH / 2.0) // center paddle to ball
+                    let paddle_width = get_pong_paddle_width(&local_gs.client_list,team_id);
+                    client_packet.mouse_pos.0 - (paddle_width / 2.0) // center paddle to ball
                 }
             },
             paddle_y,
