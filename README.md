@@ -3,4 +3,4 @@ This is a learning project where I plan to learn mostly how to make a multiplaye
 ### Key features:
 - Online multiplayer through a server and client system
 - Serverside synchronization to clients for only needed information
-- (Eventually) multiple game modes!
+- Multiple game modes!
