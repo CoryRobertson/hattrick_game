@@ -9,7 +9,7 @@ use std::time::SystemTime;
 pub static TANK_MAX_SPEED: f32 = 60.0;
 pub static TANK_ACCEL: f32 = 500.0;
 pub static TANK_TURN_SPEED: f32 = 45.0;
-pub static TANK_FRICTION: f32 = 0.98;
+pub static TANK_FRICTION: f32 = 0.99;
 
 pub static TANK_WIDTH: f32 = 20.0;
 pub static TANK_HEIGHT: f32 = 20.0;
