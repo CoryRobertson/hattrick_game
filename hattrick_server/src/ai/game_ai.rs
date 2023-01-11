@@ -59,7 +59,7 @@ pub fn spawn_ai_thread(
 
             let tcs: TankClientState = TankClientState::default();
 
-            // clone previous state just incase we want to act upon our previous actions.
+            // clone previous state just in case we want to act upon our previous actions.
             previous_pcs = pcs.clone();
             _previous_tcs = tcs.clone();
 

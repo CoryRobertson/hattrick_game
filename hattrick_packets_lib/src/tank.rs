@@ -1,19 +1,21 @@
 use crate::clientstate::ClientState;
 use crate::team::Team;
+use crate::{GAME_HEIGHT, GAME_WIDTH};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::SystemTime;
 
+// keep toying with different values, have not found something i like quite yet.
 pub static TANK_MAX_SPEED: f32 = 60.0;
-pub static TANK_ACCEL: f32 = 100.0;
+pub static TANK_ACCEL: f32 = 500.0;
 pub static TANK_TURN_SPEED: f32 = 45.0;
-pub static TANK_FRICTION: f32 = 0.96;
+pub static TANK_FRICTION: f32 = 0.98;
 
 pub static TANK_WIDTH: f32 = 20.0;
 pub static TANK_HEIGHT: f32 = 20.0;
 
-/// Cooldown in seconds for how long a tank must wait between shots.
-pub static TANK_SHOT_COOLDOWN: f64 = 1.0;
+/// Cool down in seconds for how long a tank must wait between shots.
+pub static TANK_SHOT_COOL_DOWN: f64 = 1.0;
 
 /// Velocity in pixels per second for a tank bullet to travel
 pub static TANK_BULLET_VELOCITY: f32 = 300.0;
@@ -54,6 +56,26 @@ pub struct TankBullet {
     pub y_vel: f32,
     pub bounce_count: i32,
     pub team: Team,
+}
+
+impl TankBullet {
+    /// Mutates bullet to add to its position and bounce off of walls,
+    /// difference: &f32 is the difference in time between the last call of this function to allow for inconsistent processing speed.
+    pub fn step(&mut self, difference: &f32) {
+        if self.x >= GAME_WIDTH - TANK_BULLET_RADIUS || self.x <= 0.0 + TANK_BULLET_RADIUS {
+            // if bullet x is out of the game screen
+            self.x_vel *= -1.0;
+            self.bounce_count += 1;
+        }
+        if self.y >= GAME_HEIGHT - TANK_BULLET_RADIUS || self.y <= 0.0 + TANK_BULLET_RADIUS {
+            // if bullet y is out of the game screen
+            self.y_vel *= -1.0;
+            self.bounce_count += 1;
+        }
+
+        self.x += self.x_vel * difference;
+        self.y += self.y_vel * difference;
+    }
 }
 
 impl Default for TankClientState {

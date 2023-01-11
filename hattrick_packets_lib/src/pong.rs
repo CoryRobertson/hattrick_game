@@ -12,7 +12,7 @@ pub static PONG_BALL_VEL_ADD_MIN: f32 = 0.1;
 pub static BLUE_TEAM_PADDLE_Y: f32 = 10.0;
 pub static RED_TEAM_PADDLE_Y: f32 = 550.0;
 
-// TODO: add paddle move speed, use this for players and ai alike.
+pub static PADDLE_MOVE_SPEED: f32 = 0.5; // 0.5 seems to feel pretty good a the moment
 
 /// PongGameState is an example game type struct that holds all the data for the game mode, it should contain anything related to the game-type of its parent, in this case Pong.
 #[derive(Serialize, Deserialize, Debug, Clone)]

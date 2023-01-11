@@ -5,14 +5,14 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
-    get_pong_paddle_width, PongClientState, PongGameState, BLUE_TEAM_PADDLE_Y, PONG_BALL_RADIUS,
-    PONG_BALL_VEL_ADD_MAX, PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT, PONG_PADDLE_WIDTH,
-    RED_TEAM_PADDLE_Y,
+    get_pong_paddle_width, PongClientState, PongGameState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
+    PONG_BALL_RADIUS, PONG_BALL_VEL_ADD_MAX, PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT,
+    PONG_PADDLE_WIDTH, RED_TEAM_PADDLE_Y,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
-    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOLDOWN,
-    TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
+    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
+    TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -39,7 +39,7 @@ fn main() {
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -69,6 +69,7 @@ fn main() {
     let mut ai_list: Vec<JoinHandle<()>> = vec![];
 
     for a in 0..1 {
+        // number of ai to spawn
         let ai_name = format!("ai{}", a);
         let team = {
             if a % 2 == 0 {
@@ -139,7 +140,6 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             }
 
                             if pgs.ball_y > GAME_HEIGHT - ball_radius {
-                                // FIXME: currently a bug where sometimes two points are scored for red team, unsure as to why yet. Hard to reproduce at the moment, also might happen with the other point score check, not enough testing.
                                 // ball hits bottom screen wall
                                 let default_xvel = PongGameState::default().ball_xvel;
                                 let default_yvel = PongGameState::default().ball_yvel;
@@ -152,6 +152,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 };
                                 pgs.ball_yvel = -default_yvel;
                                 pgs.blue_points += 1;
+                                pgs.ball_y = GAME_HEIGHT - ball_radius;
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "blue points scored with ball xvel: {} and ball yvel: {}",
@@ -172,6 +173,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 };
                                 pgs.ball_yvel = default_yvel;
                                 pgs.red_points += 1;
+                                pgs.ball_y = 0.0 + ball_radius;
                                 #[cfg(debug_assertions)]
                                 println!(
                                     "red points scored with ball xvel: {} and ball yvel: {}",
@@ -295,7 +297,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 .unwrap()
                                 .as_secs_f64();
 
-                            if client_key_state.space_bar && last_shot_diff > TANK_SHOT_COOLDOWN {
+                            if client_key_state.space_bar && last_shot_diff > TANK_SHOT_COOL_DOWN {
                                 client.1.tank_client_state.last_shot_time = SystemTime::now();
                                 // println!("shot time: {:?}", last_shot_diff);
 
@@ -364,20 +366,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         } // input handling for clients
 
                         for mut bullet in &mut tgs.bullets {
-                            if bullet.x >= GAME_WIDTH - TANK_BULLET_RADIUS
-                                || bullet.x <= 0.0 + TANK_BULLET_RADIUS
-                            {
-                                bullet.x_vel *= -1.0;
-                                bullet.bounce_count += 1;
-                            }
-                            if bullet.y >= GAME_HEIGHT - TANK_BULLET_RADIUS
-                                || bullet.y <= 0.0 + TANK_BULLET_RADIUS
-                            {
-                                bullet.y_vel *= -1.0;
-                                bullet.bounce_count += 1;
-                            }
-                            bullet.x += bullet.x_vel * difference;
-                            bullet.y += bullet.y_vel * difference;
+                            bullet.step(&difference);
                         } // do physics for bullets
 
                         for index in 0..tgs.bullets.len() {
@@ -515,9 +504,23 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                     }
                                 };
 
-                                // TODO: change this so we move the paddle closer to the client mouse pos over time, maybe we calc the distance we need to move, say 15.0 distance, and we have a move speed we choose to move towards it or not.
-                                //  See other todos for more details on this.
-                                let client_x = c.mouse_pos.0 - (PONG_PADDLE_WIDTH / 2.0); // the client renders the rectangle from its top left corner, so to center it, we subtract half the paddle width
+                                let previous_client_x = prev_client.pong_client_state.paddle_x;
+
+                                // client x representing the clients paddle location, variable to be within the game width static variable.
+                                let client_x;
+                                // subtract half of the paddle width from the mouse position so we can center it on the players mouse,
+                                // since drawing for this game lib draws from top left
+                                if (c.mouse_pos.0
+                                    - (get_pong_paddle_width(&local_gs.client_list, &c.team_id)
+                                        / 2.0))
+                                    < previous_client_x
+                                {
+                                    // mouse is to the left of the paddle at the moment
+                                    client_x = previous_client_x - PADDLE_MOVE_SPEED;
+                                } else {
+                                    // mouse is to the right of the paddle at the moment
+                                    client_x = previous_client_x + PADDLE_MOVE_SPEED;
+                                }
 
                                 let client_state: ClientState = ClientState {
                                     // create the new client state from the information we have from the client info.
@@ -526,7 +529,8 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                     mouse_pos: c.mouse_pos,
                                     key_state: c.key_state,
                                     pong_client_state: PongClientState {
-                                        paddle_x: client_x,
+                                        paddle_x: client_x
+                                            .clamp(0.0, GAME_WIDTH - PONG_PADDLE_WIDTH),
                                         paddle_y: client_y,
                                     },
                                     tank_client_state: prev_client.tank_client_state,
