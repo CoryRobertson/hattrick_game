@@ -192,12 +192,10 @@ impl PongGameState {
                     } else {
                         self.ball_xvel += rand_xvel_change;
                     }
+                } else if cs.key_state.space_bar {
+                    self.ball_xvel -= rand_xvel_change * POWER_HIT_MODIFIER;
                 } else {
-                    if cs.key_state.space_bar {
-                        self.ball_xvel -= rand_xvel_change * POWER_HIT_MODIFIER;
-                    } else {
-                        self.ball_xvel -= rand_xvel_change;
-                    }
+                    self.ball_xvel -= rand_xvel_change;
                 }
 
                 if self.ball_yvel > 0.0 {
@@ -207,12 +205,10 @@ impl PongGameState {
                     } else {
                         self.ball_yvel += rand_yvel_change;
                     }
+                } else if cs.key_state.space_bar {
+                    self.ball_yvel -= rand_yvel_change * 2.0;
                 } else {
-                    if cs.key_state.space_bar {
-                        self.ball_yvel -= rand_yvel_change * 2.0;
-                    } else {
-                        self.ball_yvel -= rand_yvel_change;
-                    }
+                    self.ball_yvel -= rand_yvel_change;
                 }
 
                 #[cfg(debug_assertions)]
