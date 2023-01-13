@@ -1,6 +1,7 @@
 use crate::clientstate::ClientState;
 use crate::team::Team;
-use crate::{GAME_HEIGHT, GAME_WIDTH};
+use crate::{distance, GAME_HEIGHT, GAME_WIDTH};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::SystemTime;
@@ -97,7 +98,6 @@ pub fn respawn_tank(
     _bullets: &Vec<TankBullet>,
     _clients: &HashMap<String, ClientState>,
 ) {
-    // TODO: write function that takes in list of all bullets, list of all clients, and finds a location furthest from all of them.
-    tank_client_state.tank_x = 0.0;
-    tank_client_state.tank_y = 0.0;
+    tank_client_state.tank_x = rand::thread_rng().gen_range(0.0..GAME_WIDTH);
+    tank_client_state.tank_y = rand::thread_rng().gen_range(0.0..GAME_HEIGHT);
 }
