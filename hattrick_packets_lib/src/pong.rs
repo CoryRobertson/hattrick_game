@@ -1,6 +1,8 @@
 use crate::clientstate::ClientState;
 use crate::team::Team;
 use crate::team::Team::{BlueTeam, RedTeam};
+use crate::{GAME_HEIGHT, GAME_WIDTH};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -69,6 +71,135 @@ impl Default for PongGameState {
             red_points: 0,
             blue_points: 0,
         }
+    }
+}
+
+impl PongGameState {
+    /// Steps the physics of the ball in pong using the delta time from the previous step, difference should be measured in seconds since last step.
+    pub fn step_ball(&mut self, difference: &f32) {
+        let ball_radius = PONG_BALL_RADIUS;
+
+        // blue team top of screen, red team bottom
+        // ball physics multiplied by delta time since last "frame" allows us to run game speed  independent of application run speed.
+        self.ball_x += (self.ball_xvel * difference) * 16.0; // magic number multiplier
+        self.ball_y += (self.ball_yvel * difference) * 16.0;
+
+        {
+            if self.ball_x < 0.0 + ball_radius {
+                // left screen wall
+                self.ball_xvel *= -1.0;
+            }
+
+            if self.ball_x > GAME_WIDTH - ball_radius {
+                // right screen wall
+                self.ball_xvel *= -1.0;
+            }
+
+            if self.ball_y > GAME_HEIGHT - ball_radius {
+                // ball hits bottom screen wall
+                let default_xvel = PongGameState::default().ball_xvel;
+                let default_yvel = PongGameState::default().ball_yvel;
+                self.ball_xvel = {
+                    if self.ball_xvel < 0.0 {
+                        -default_xvel
+                    } else {
+                        default_xvel
+                    }
+                };
+                self.ball_yvel = -default_yvel;
+                self.blue_points += 1;
+                self.ball_y = GAME_HEIGHT - ball_radius;
+                #[cfg(debug_assertions)]
+                println!(
+                    "blue points scored with ball xvel: {} and ball yvel: {}",
+                    self.ball_xvel, self.ball_yvel
+                );
+            }
+
+            if self.ball_y < 0.0 + ball_radius {
+                // ball hits top screen wall
+                let default_xvel = PongGameState::default().ball_xvel;
+                let default_yvel = PongGameState::default().ball_yvel;
+                self.ball_xvel = {
+                    if self.ball_xvel < 0.0 {
+                        -default_xvel
+                    } else {
+                        default_xvel
+                    }
+                };
+                self.ball_yvel = default_yvel;
+                self.red_points += 1;
+                self.ball_y = 0.0 + ball_radius;
+                #[cfg(debug_assertions)]
+                println!(
+                    "red points scored with ball xvel: {} and ball yvel: {}",
+                    self.ball_xvel, self.ball_yvel
+                );
+            }
+        } // bounce checks for ball on walls
+    }
+
+    /// Steps the pong game state using the client list, checkins the ball collision on each players paddle. Function does not move ball, nor paddles.
+    /// Instead the function changes the velocities of the ball in accordance.
+    pub fn step_game_state(&mut self, client_list: &HashMap<String, ClientState>) {
+        let ball_radius = PONG_BALL_RADIUS;
+
+        for client in client_list {
+            let cs = client.1;
+
+            let cx = cs.pong_client_state.paddle_x; // client x
+            let cy = {
+                if cs.team_id == BlueTeam {
+                    cs.pong_client_state.paddle_y + ball_radius
+                } else {
+                    cs.pong_client_state.paddle_y - ball_radius
+                }
+            }; // client y after taking into account the ball radius, cheap way to do it i know :)
+            let cw = get_pong_paddle_width(client_list, &cs.team_id); // client width
+            let ch = PONG_PADDLE_HEIGHT; // client height
+
+            if (self.ball_y > cy && self.ball_y < cy + ch)
+                && (self.ball_x > cx && self.ball_x < cx + cw)
+            {
+                // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
+                match &cs.team_id {
+                    RedTeam => {
+                        // if client is red we make sure the yvel is set to a negative number.
+                        self.ball_yvel = -(self.ball_yvel.abs());
+                    }
+                    BlueTeam => {
+                        // if the client is blue we set the yvel to a positive number.
+                        self.ball_yvel = self.ball_yvel.abs();
+                    }
+                } // match block to determine which direction to send the ball in on a collision
+
+                // variables used to randomly add some amount of velocity when a bounce happens on a paddle.
+                let rand_xvel_change: f32 =
+                    rand::thread_rng().gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new x velocity change for when a bounce needs to occur
+                let rand_yvel_change: f32 =
+                    rand::thread_rng().gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new y velocity change for when a bounce needs to occur
+
+                if self.ball_xvel > 0.0 {
+                    // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
+                    self.ball_xvel += rand_xvel_change;
+                } else {
+                    self.ball_xvel -= rand_xvel_change;
+                }
+
+                if self.ball_yvel > 0.0 {
+                    // ditto from comment above
+                    self.ball_yvel += rand_yvel_change;
+                } else {
+                    self.ball_yvel -= rand_yvel_change;
+                }
+
+                #[cfg(debug_assertions)]
+                println!(
+                    "bounced with: new xvel ({}), new yvel ({}): {} {}",
+                    rand_xvel_change, rand_yvel_change, self.ball_xvel, self.ball_yvel
+                );
+            } // bounce checks for ball on paddles of clients
+        } // client loop for game state
     }
 }
 

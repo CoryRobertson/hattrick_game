@@ -5,8 +5,7 @@ use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
-    get_pong_paddle_width, PongClientState, PongGameState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
-    PONG_BALL_RADIUS, PONG_BALL_VEL_ADD_MAX, PONG_BALL_VEL_ADD_MIN, PONG_PADDLE_HEIGHT,
+    get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
     PONG_PADDLE_WIDTH, RED_TEAM_PADDLE_Y,
 };
 use hattrick_packets_lib::tank::{
@@ -16,8 +15,7 @@ use hattrick_packets_lib::tank::{
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
-use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_HEIGHT, GAME_WIDTH};
-use rand::Rng;
+use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_WIDTH};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex, RwLock};
@@ -39,7 +37,7 @@ fn main() {
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    //game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -121,128 +119,12 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                 // basic game logic goes here
                 match copy_gs.game_type {
                     PONG(mut pgs) => {
-                        let ball_radius = PONG_BALL_RADIUS;
+                        // step the physics of the ball
+                        pgs.step_ball(&difference);
+                        // step the game state using the clients
+                        pgs.step_game_state(&copy_gs.client_list);
 
-                        // blue team top of screen, red team bottom
-                        // ball physics multiplied by delta time since last "frame" allows us to run game speed  independent of application run speed.
-                        pgs.ball_x += (pgs.ball_xvel * difference) * 16.0; // magic number multiplier
-                        pgs.ball_y += (pgs.ball_yvel * difference) * 16.0;
-
-                        {
-                            if pgs.ball_x < 0.0 + ball_radius {
-                                // left screen wall
-                                pgs.ball_xvel *= -1.0;
-                            }
-
-                            if pgs.ball_x > GAME_WIDTH - ball_radius {
-                                // right screen wall
-                                pgs.ball_xvel *= -1.0;
-                            }
-
-                            if pgs.ball_y > GAME_HEIGHT - ball_radius {
-                                // ball hits bottom screen wall
-                                let default_xvel = PongGameState::default().ball_xvel;
-                                let default_yvel = PongGameState::default().ball_yvel;
-                                pgs.ball_xvel = {
-                                    if pgs.ball_xvel < 0.0 {
-                                        -default_xvel
-                                    } else {
-                                        default_xvel
-                                    }
-                                };
-                                pgs.ball_yvel = -default_yvel;
-                                pgs.blue_points += 1;
-                                pgs.ball_y = GAME_HEIGHT - ball_radius;
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "blue points scored with ball xvel: {} and ball yvel: {}",
-                                    pgs.ball_xvel, pgs.ball_yvel
-                                );
-                            }
-
-                            if pgs.ball_y < 0.0 + ball_radius {
-                                // ball hits top screen wall
-                                let default_xvel = PongGameState::default().ball_xvel;
-                                let default_yvel = PongGameState::default().ball_yvel;
-                                pgs.ball_xvel = {
-                                    if pgs.ball_xvel < 0.0 {
-                                        -default_xvel
-                                    } else {
-                                        default_xvel
-                                    }
-                                };
-                                pgs.ball_yvel = default_yvel;
-                                pgs.red_points += 1;
-                                pgs.ball_y = 0.0 + ball_radius;
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "red points scored with ball xvel: {} and ball yvel: {}",
-                                    pgs.ball_xvel, pgs.ball_yvel
-                                );
-                            }
-                        } // bounce checks for ball on walls
-
-                        for client in &copy_gs.client_list {
-                            let cs = client.1;
-
-                            let cx = cs.pong_client_state.paddle_x; // client x
-                            let cy = {
-                                if cs.team_id == BlueTeam {
-                                    // cs.pos.1 + ball_radius
-                                    cs.pong_client_state.paddle_y + ball_radius
-                                } else {
-                                    // cs.pos.1 - ball_radius
-                                    cs.pong_client_state.paddle_y - ball_radius
-                                }
-                            }; // client y after taking into account the ball radius, cheap way to do it i know :)
-                            let cw = get_pong_paddle_width(&copy_gs.client_list, &cs.team_id); // client width
-                            let ch = PONG_PADDLE_HEIGHT; // client height
-
-                            if (pgs.ball_y > cy && pgs.ball_y < cy + ch)
-                                && (pgs.ball_x > cx && pgs.ball_x < cx + cw)
-                            {
-                                // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
-                                match &cs.team_id {
-                                    RedTeam => {
-                                        // if client is red we make sure the yvel is set to a negative number.
-                                        pgs.ball_yvel = -(pgs.ball_yvel.abs());
-                                    }
-                                    BlueTeam => {
-                                        // if the client is blue we set the yvel to a positive number.
-                                        pgs.ball_yvel = pgs.ball_yvel.abs();
-                                    }
-                                } // match block to determine which direction to send the ball in on a collision
-
-                                let rand_xvel_change: f32 = rand::thread_rng()
-                                    .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new x velocity change for when a bounce needs to occur
-                                let rand_yvel_change: f32 = rand::thread_rng()
-                                    .gen_range(PONG_BALL_VEL_ADD_MIN..PONG_BALL_VEL_ADD_MAX); // generate a random new y velocity change for when a bounce needs to occur
-
-                                if pgs.ball_xvel > 0.0 {
-                                    // if ball hits paddle, add a random amount of x velocity to the ball, in the direction it is currently traveling
-                                    pgs.ball_xvel += rand_xvel_change;
-                                } else {
-                                    pgs.ball_xvel -= rand_xvel_change;
-                                }
-
-                                if pgs.ball_yvel > 0.0 {
-                                    // ditto from comment above
-                                    pgs.ball_yvel += rand_yvel_change;
-                                } else {
-                                    pgs.ball_yvel -= rand_yvel_change;
-                                }
-
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "bounced with: new xvel ({}), new yvel ({}): {} {}",
-                                    rand_xvel_change,
-                                    rand_yvel_change,
-                                    pgs.ball_xvel,
-                                    pgs.ball_yvel
-                                );
-                            } // bounce checks for ball on paddles of clients
-                        } // client loop for game state
-
+                        // update the game state that is on the server with the new game state that has been stepped.
                         {
                             let mut lock = game_state_rw.write().unwrap();
                             lock.game_type = PONG(pgs);
@@ -365,7 +247,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             round_digits(&mut client.1.tank_client_state.tank_y, 4);
                         } // input handling for clients
 
-                        for mut bullet in &mut tgs.bullets {
+                        for bullet in &mut tgs.bullets {
                             bullet.step(&difference);
                         } // do physics for bullets
 
@@ -510,16 +392,21 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 let client_x;
                                 // subtract half of the paddle width from the mouse position so we can center it on the players mouse,
                                 // since drawing for this game lib draws from top left
-                                if (c.mouse_pos.0
-                                    - (get_pong_paddle_width(&local_gs.client_list, &c.team_id)
-                                        / 2.0))
-                                    < previous_client_x
-                                {
-                                    // mouse is to the left of the paddle at the moment
-                                    client_x = previous_client_x - PADDLE_MOVE_SPEED;
+                                let paddle_half_width = (get_pong_paddle_width(&local_gs.client_list, &c.team_id) / 2.0);
+                                let middle_of_paddle = (c.mouse_pos.0 - paddle_half_width);
+
+                                // only move paddle if the difference in its x position and the mouse x position is larger than a specific amount (probably needs tuning).
+                                if (middle_of_paddle - previous_client_x).abs() > paddle_half_width / 10.0 {
+                                    if middle_of_paddle < previous_client_x {
+                                        // mouse is to the left of the paddle at the moment
+                                        client_x = previous_client_x - PADDLE_MOVE_SPEED;
+                                    } else {
+                                        // mouse is to the right of the paddle at the moment
+                                        client_x = previous_client_x + PADDLE_MOVE_SPEED;
+                                    }
                                 } else {
-                                    // mouse is to the right of the paddle at the moment
-                                    client_x = previous_client_x + PADDLE_MOVE_SPEED;
+                                    // if we dont move the paddle at all, just give it its previous value.
+                                    client_x = previous_client_x;
                                 }
 
                                 let client_state: ClientState = ClientState {
