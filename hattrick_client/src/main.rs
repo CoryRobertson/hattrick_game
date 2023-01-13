@@ -217,7 +217,12 @@ async fn main() {
                             );
                         }
 
+                        #[cfg(debug_assertions)]
+                        draw_text(&format!("DEBUG: {}, {}",pgs.ball_xvel,pgs.ball_yvel),pgs.ball_x + 20.0,pgs.ball_y,18.0,BLACK);
                         draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
+
+                        #[cfg(debug_assertions)]
+                        draw_circle(pgs.ball_x +(pgs.ball_xvel * 5.0),pgs.ball_y,5.0,BLACK);
                         draw_poly(
                             pgs.ball_x,
                             pgs.ball_y,

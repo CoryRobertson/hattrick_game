@@ -9,8 +9,8 @@ use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::{Magnitude, GAME_WIDTH};
 
 /// Multiplicative modifier applied to the ball speed to determine how close the ball gets to the paddle before the AI stops reacting.
-static REACTION_DISTANCE_MODIFIER: f32 = 2.0;
-static PADDLE_MOVE_SPEED_MODIFIER: f32 = 3.0;
+static REACTION_DISTANCE_MODIFIER: f32 = 1.0;
+static PADDLE_MOVE_SPEED_MODIFIER: f32 = 5.0;
 
 pub fn get_pong_state_for_ai(
     team_id: &Team,
@@ -47,8 +47,6 @@ pub fn get_pong_state_for_ai(
             GameType::PONG(pgs) => pgs.ball_y,
             _ => -1.0, // only get a ball height if we are playing pong
         }; // ball y value
-
-        // TODO: make the ai paddle go to the location the ball will eventually be aka its position plus the balls magnitude.
 
         let new_paddle_x = {
             if (ball_height - paddle_y).abs() < reaction_distance

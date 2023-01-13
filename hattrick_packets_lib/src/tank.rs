@@ -4,7 +4,7 @@ use crate::{distance, GAME_HEIGHT, GAME_WIDTH};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // keep toying with different values, have not found something i like quite yet.
 pub static TANK_MAX_SPEED: f32 = 60.0;
@@ -98,6 +98,48 @@ pub fn respawn_tank(
     _bullets: &Vec<TankBullet>,
     _clients: &HashMap<String, ClientState>,
 ) {
-    tank_client_state.tank_x = rand::thread_rng().gen_range(0.0..GAME_WIDTH);
-    tank_client_state.tank_y = rand::thread_rng().gen_range(0.0..GAME_HEIGHT);
+    let position: (f32, f32, f32) = (0..10) // generate 10 random positions to potentially respawn the player
+        .into_iter()
+        .map(|_| { // map with _ because we dont care about the individual numbers.
+            // rand x and y values
+            let rx = rand::thread_rng().gen_range(0.0..GAME_WIDTH);
+            let ry = rand::thread_rng().gen_range(0.0..GAME_HEIGHT);
+
+            // from those random x and y values, generate the distance to the closest tank in the game
+            let closest_tank_dist = _clients
+                .iter()
+                .map(|(_, clientstate)| { // map only each client state, as we dont care  about their uuid s
+                    distance(
+                        clientstate.tank_client_state.tank_x,
+                        clientstate.tank_client_state.tank_y,
+                        rx,
+                        ry,
+                    ) // map the distance from the random x and y to the every given tank x and y
+                })
+                .reduce(|acc, dist| if dist < acc { dist } else { acc }) // keep only the lowest value of distance, meaning drop all values that are greater than the smallest value
+                .unwrap();
+            (rx, ry, closest_tank_dist) // map the x and y position and the closest tank distance to each x and y position
+        })
+        .reduce(|(acc_x, acc_y, acc_dist), (pos_x, pos_y, pos_dist)| {
+            if acc_dist > pos_dist {
+                (acc_x, acc_y, acc_dist)
+            } else {
+                (pos_x, pos_y, pos_dist)
+            } // now instead of keeping the lowest, keep the highest distance value, meaning the furthest possible point from all tanks, from a specific number of randomly generated points.
+        })
+        .unwrap();
+
+    // move tanks new position
+    tank_client_state.tank_x = position.0;
+    tank_client_state.tank_y = position.1;
+
+    // zero out the tanks velocity
+    tank_client_state.tank_x_vel = 0.0;
+    tank_client_state.tank_y_vel = 0.0;
+
+    // randomize the tanks rotation so its a little different every time
+    tank_client_state.rotation = rand::thread_rng().gen_range(0.0..360.0);
+
+    // set their last shot time to unix epoch so they can shoot immediately no matter what
+    tank_client_state.last_shot_time = UNIX_EPOCH;
 }

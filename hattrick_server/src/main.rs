@@ -4,14 +4,11 @@ use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
-use hattrick_packets_lib::pong::{
-    get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
-    PONG_PADDLE_WIDTH, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y,
-};
+use hattrick_packets_lib::pong::{get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED, PONG_PADDLE_WIDTH, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y, POWER_HIT_COOLDOWN};
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
-    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN,
-    TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
+    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
+    TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -37,7 +34,7 @@ fn main() {
     let game_state_rwl: GameStateRW = Arc::new(RwLock::new(GameState::default()));
     let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
-    //game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -409,6 +406,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 {
                                     if middle_of_paddle < previous_client_x {
                                         // mouse is to the left of the paddle at the moment
+                                        // TODO: maybe slow paddle move speed by 20% when the power move time is < the cool down? unsure if good idea or not.
                                         client_x = previous_client_x - PADDLE_MOVE_SPEED;
                                     } else {
                                         // mouse is to the right of the paddle at the moment
@@ -422,7 +420,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 // variable to update power hit time before we move the key state somewhere else,
                                 // power hit time is either updated to now or the previous depending on if the client is pressing space
                                 let update_power_hit_time = {
-                                    if c.key_state.space_bar {
+                                    if c.key_state.space_bar && time_since_last_power_hit >= POWER_HIT_COOLDOWN {
                                         SystemTime::now()
                                     } else {
                                         prev_client.pong_client_state.time_of_power_hit

@@ -19,6 +19,7 @@ pub static PADDLE_MOVE_SPEED: f32 = 0.5; // 0.5 seems to feel pretty good a the 
 
 pub static POWER_HIT_MODIFIER: f32 = 1.5; // velocity multiplier for added velocity on each paddle bounce for ball
 pub static POWER_HIT_LOCK_TIME: f32 = 1.0; // how long to lock a paddle in place when a power hit is initiated
+pub static POWER_HIT_COOLDOWN: f32 = 2.0;
 
 /// PongGameState is an example game type struct that holds all the data for the game mode, it should contain anything related to the game-type of its parent, in this case Pong.
 #[derive(Serialize, Deserialize, Debug, Clone)]

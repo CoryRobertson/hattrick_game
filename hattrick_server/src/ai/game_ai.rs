@@ -40,7 +40,7 @@ pub fn spawn_ai_thread(
                 mouse_pos: {
                     // TODO: this is gonna have to be refactored into each ai specific source file. But I will do that once it is needed. Alternatively the ai function could modify it so we dont have to use this at all.
                     let x = match &local_gs.game_type {
-                        GameType::PONG(pgs) => pgs.ball_x,
+                        GameType::PONG(pgs) => pgs.ball_x + (pgs.ball_xvel * 5.0),
                         GameType::TANK(_) => 0.0,
                     };
                     (x, 0.0)
