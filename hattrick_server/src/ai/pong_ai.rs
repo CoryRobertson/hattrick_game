@@ -76,6 +76,7 @@ pub fn get_pong_state_for_ai(
                 new_paddle_x.clamp(0.0, GAME_WIDTH - paddle_width)
             },
             paddle_y,
+            time_of_power_hit: previous_pcs.time_of_power_hit,
         }
     }
 }

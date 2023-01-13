@@ -6,12 +6,12 @@ use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{
     get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
-    PONG_PADDLE_WIDTH, RED_TEAM_PADDLE_Y,
+    PONG_PADDLE_WIDTH, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
-    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
-    TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
+    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS,
+    TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN,
+    TANK_TURN_SPEED, TANK_WIDTH,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
@@ -392,11 +392,21 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 let client_x;
                                 // subtract half of the paddle width from the mouse position so we can center it on the players mouse,
                                 // since drawing for this game lib draws from top left
-                                let paddle_half_width = (get_pong_paddle_width(&local_gs.client_list, &c.team_id) / 2.0);
-                                let middle_of_paddle = (c.mouse_pos.0 - paddle_half_width);
+                                let paddle_half_width =
+                                    get_pong_paddle_width(&local_gs.client_list, &c.team_id) / 2.0;
+                                let middle_of_paddle = c.mouse_pos.0 - paddle_half_width;
+
+                                let time_since_last_power_hit = SystemTime::now()
+                                    .duration_since(prev_client.pong_client_state.time_of_power_hit)
+                                    .unwrap()
+                                    .as_secs_f32();
 
                                 // only move paddle if the difference in its x position and the mouse x position is larger than a specific amount (probably needs tuning).
-                                if (middle_of_paddle - previous_client_x).abs() > paddle_half_width / 10.0 {
+                                // also only move the paddle if the time we last power hit is greater or equal to the lock time, so that a power hit locks the paddle in place
+                                if (middle_of_paddle - previous_client_x).abs()
+                                    > paddle_half_width / 10.0
+                                    && time_since_last_power_hit >= POWER_HIT_LOCK_TIME
+                                {
                                     if middle_of_paddle < previous_client_x {
                                         // mouse is to the left of the paddle at the moment
                                         client_x = previous_client_x - PADDLE_MOVE_SPEED;
@@ -409,6 +419,16 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                     client_x = previous_client_x;
                                 }
 
+                                // variable to update power hit time before we move the key state somewhere else,
+                                // power hit time is either updated to now or the previous depending on if the client is pressing space
+                                let update_power_hit_time = {
+                                    if c.key_state.space_bar {
+                                        SystemTime::now()
+                                    } else {
+                                        prev_client.pong_client_state.time_of_power_hit
+                                    }
+                                };
+
                                 let client_state: ClientState = ClientState {
                                     // create the new client state from the information we have from the client info.
                                     time: c.time,
@@ -419,6 +439,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                         paddle_x: client_x
                                             .clamp(0.0, GAME_WIDTH - PONG_PADDLE_WIDTH),
                                         paddle_y: client_y,
+                                        time_of_power_hit: update_power_hit_time,
                                     },
                                     tank_client_state: prev_client.tank_client_state,
                                 };

@@ -171,6 +171,34 @@ async fn main() {
                             let width =
                                 get_pong_paddle_width(&local_gs.client_list, &client_state.team_id);
 
+                            let time_since_last_power_hit = SystemTime::now()
+                                .duration_since(client_state.pong_client_state.time_of_power_hit)
+                                .unwrap()
+                                .as_secs_f32();
+
+                            // draw power hit circles on paddle
+                            if time_since_last_power_hit <= 1.0 {
+                                // y coordinate amount to add depending on the team of the client.
+                                let circle_y_modifier = {
+                                    match client_state.team_id {
+                                        RedTeam => PONG_PADDLE_HEIGHT,
+                                        BlueTeam => 0.0,
+                                    }
+                                };
+                                draw_circle(
+                                    client_pos.0,
+                                    client_pos.1 + circle_y_modifier,
+                                    5.0,
+                                    ORANGE,
+                                ); // draw circle on left side of paddle
+                                draw_circle(
+                                    client_pos.0 + width,
+                                    client_pos.1 + circle_y_modifier,
+                                    5.0,
+                                    ORANGE,
+                                ); // draw circle on right side of paddle
+                            }
+
                             draw_rectangle(
                                 client_pos.0,
                                 client_pos.1,
