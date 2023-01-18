@@ -18,7 +18,7 @@ pub fn get_pong_state_for_ai(
     client_packet: &mut ClientInfo,
     previous_pcs: &PongClientState,
 ) -> PongClientState {
-    // paddle heights based on team
+    // paddle y values based on team
     // BlueTeam => 10.0,
     // RedTeam => 550.0,
     {

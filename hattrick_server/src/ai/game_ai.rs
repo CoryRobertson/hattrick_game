@@ -30,11 +30,15 @@ pub fn spawn_ai_thread(
         let name = name;
         let mut previous_pcs = PongClientState::default();
         let mut _previous_tcs = TankClientState::default();
+
         // TODO: eventually generate a random number to be used for each ai.
         //  Each ai would have a "seed" that tells them specific things about their gameplay. For example a seed could determine the offset they play with their paddle in pong,
         //  or how close they let the ball get before they stop moving.
         loop {
             // Do ai logic on one of these three lines
+
+
+
             let mut client_packet = ClientInfo {
                 time: SystemTime::now(),
                 mouse_pos: {
@@ -58,11 +62,11 @@ pub fn spawn_ai_thread(
             let pcs: PongClientState =
                 get_pong_state_for_ai(&team_id, &local_gs, &mut client_packet, &previous_pcs); // use an ai function to make this pong client state
 
-            let tcs: TankClientState = TankClientState::default();
+            let tcs: TankClientState = _previous_tcs.clone(); // this doesnt work
 
             // clone previous state just in case we want to act upon our previous actions.
             previous_pcs = pcs.clone();
-            _previous_tcs = tcs.clone();
+            // _previous_tcs = tcs.clone();
 
             let client_state: ClientState = ClientState {
                 time: client_packet.time,

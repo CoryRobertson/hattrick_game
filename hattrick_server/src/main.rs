@@ -1,13 +1,11 @@
+use std::alloc::System;
 use crate::ai::game_ai::spawn_ai_thread;
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
-use hattrick_packets_lib::gamestate::GameState;
+use hattrick_packets_lib::gamestate::{GameState, VOTE_TIME};
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
-use hattrick_packets_lib::pong::{
-    get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
-    PONG_PADDLE_WIDTH, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y,
-};
+use hattrick_packets_lib::pong::{get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED, PONG_PADDLE_WIDTH, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y, PONG_POINTS_TO_WIN};
 use hattrick_packets_lib::tank::{
     respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
     TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
@@ -38,7 +36,7 @@ fn main() {
     let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
     // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
-    game_state_rwl.write().unwrap().vote_running = true;
+    // game_state_rwl.write().unwrap().vote_running = true;
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -125,11 +123,20 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         // step the game state using the clients
                         pgs.step_game_state(&copy_gs.client_list);
 
+
                         // update the game state that is on the server with the new game state that has been stepped.
                         {
                             let mut lock = game_state_rw.write().unwrap();
-                            lock.game_type = PONG(pgs);
                             lock.time = SystemTime::now();
+                            if pgs.blue_points >= PONG_POINTS_TO_WIN || pgs.red_points >= PONG_POINTS_TO_WIN {
+                                lock.vote_running = true;
+                                lock.try_conclude_vote();
+                            } else {
+                                lock.vote_running = false;
+                                lock.game_type = PONG(pgs);
+                                lock.time = SystemTime::now();
+                            }
+
                         } // at the end of the game loop for pong, we add all the new data into the game state.
                     }
 
@@ -287,6 +294,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
 
                         {
                             let mut lock = game_state_rw.write().unwrap();
+                            lock.vote_running = false;
                             lock.game_type = TANK(tgs);
                             lock.client_list = client_list;
                             lock.time = SystemTime::now();

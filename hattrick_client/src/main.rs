@@ -438,6 +438,8 @@ fn spawn_connect_thread(
                                 if is_key_released(KeyCode::Right) {
                                     vote_num = (vote_num as i32 + 1).clamp(0, 255) as u8;
                                 }
+                            } else {
+                                vote_num = 0;
                             }
                             vote_num
                         }
