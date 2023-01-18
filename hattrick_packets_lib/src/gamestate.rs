@@ -1,13 +1,13 @@
 use crate::clientstate::ClientState;
 use crate::gametypes::GameType;
 use crate::gametypes::GameType::{PONG, TANK};
-use crate::pong::PongGameState;
+use crate::pong::{PongClientState, PongGameState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use crate::get_vote_count_for_number;
-use crate::tank::TankGameState;
+use crate::tank::{TankClientState, TankGameState};
 
 pub static VOTE_TIME: f32 = 10.0;
 
@@ -72,6 +72,13 @@ impl GameState {
                     println!("won game type: {:?}, {}", voted_game_type,_vote_count);
 
                     self.game_type = voted_game_type;
+                    self.vote_start_time = None;
+                    for (_,client) in &mut self.client_list {
+                        // probably not the best way to reset all the game modes, but I am happy with it for now.
+                        client.vote_number = 0;
+                        client.tank_client_state = TankClientState::default();
+                        client.pong_client_state = PongClientState::default();
+                    }
 
                 }
             } else {

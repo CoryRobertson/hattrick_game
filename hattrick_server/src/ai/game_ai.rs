@@ -36,7 +36,12 @@ pub fn spawn_ai_thread(
         //  or how close they let the ball get before they stop moving.
         loop {
             // Do ai logic on one of these three lines
-
+            _previous_tcs = match &game_state.read().unwrap().client_list.get(&name) {
+                None => { _previous_tcs.clone() }
+                Some(client) => {
+                    client.tank_client_state.clone()
+                }
+            };
 
 
             let mut client_packet = ClientInfo {
@@ -62,7 +67,7 @@ pub fn spawn_ai_thread(
             let pcs: PongClientState =
                 get_pong_state_for_ai(&team_id, &local_gs, &mut client_packet, &previous_pcs); // use an ai function to make this pong client state
 
-            let tcs: TankClientState = _previous_tcs.clone(); // this doesnt work
+            // let tcs: TankClientState = _previous_tcs.clone(); // this doesnt work
 
             // clone previous state just in case we want to act upon our previous actions.
             previous_pcs = pcs.clone();
@@ -73,7 +78,7 @@ pub fn spawn_ai_thread(
                 mouse_pos: client_packet.mouse_pos,
                 key_state: client_packet.key_state,
                 pong_client_state: pcs, // use modified pong client state
-                tank_client_state: tcs, // use modified tank client state
+                tank_client_state: _previous_tcs.clone(), // use modified tank client state
                 team_id: client_packet.team_id,
                 vote_number: client_packet.vote_number,
             };

@@ -14,7 +14,7 @@ pub static PONG_BALL_VEL_ADD_MAX: f32 = 5.0;
 pub static PONG_BALL_VEL_ADD_MIN: f32 = 0.1;
 pub static BLUE_TEAM_PADDLE_Y: f32 = 10.0;
 pub static RED_TEAM_PADDLE_Y: f32 = 550.0;
-pub static PONG_POINTS_TO_WIN: i32 = 1;
+pub static PONG_POINTS_TO_WIN: i32 = 10;
 
 pub static PADDLE_MOVE_SPEED: f32 = 0.5; // 0.5 seems to feel pretty good a the moment
 

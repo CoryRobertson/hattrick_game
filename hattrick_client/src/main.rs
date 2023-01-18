@@ -299,6 +299,8 @@ async fn main() {
                                 }
                             };
 
+                            draw_text(&format!("Red Score: {} Blue Score: {}", tgs.red_score, tgs.blue_score), 30.0, 40.0, 18.0, BLACK);
+
                             // debug info for each tank
                             #[cfg(debug_assertions)]
                             draw_text(

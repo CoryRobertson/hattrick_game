@@ -1,16 +1,11 @@
-use std::alloc::System;
 use crate::ai::game_ai::spawn_ai_thread;
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
-use hattrick_packets_lib::gamestate::{GameState, VOTE_TIME};
+use hattrick_packets_lib::gamestate::{GameState};
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED, PONG_PADDLE_WIDTH, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y, PONG_POINTS_TO_WIN};
-use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
-    TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
-    TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
-};
+use hattrick_packets_lib::tank::{respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH, TANK_WIN_SCORE};
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
 use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_WIDTH};
@@ -122,7 +117,6 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         pgs.step_ball(&difference);
                         // step the game state using the clients
                         pgs.step_game_state(&copy_gs.client_list);
-
 
                         // update the game state that is on the server with the new game state that has been stepped.
                         {
@@ -281,6 +275,14 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                     ) < TANK_BULLET_RADIUS + (TANK_WIDTH + TANK_HEIGHT) / 2.0
                                         && bullet.team != client.1.team_id
                                     {
+                                        match client.1.team_id {
+                                            RedTeam => {
+                                                tgs.blue_score += 1;
+                                            }
+                                            BlueTeam => {
+                                                tgs.red_score += 1;
+                                            }
+                                        }
                                         respawn_tank(
                                             &mut client.1.tank_client_state,
                                             &copy_bullets_list,
@@ -294,10 +296,19 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
 
                         {
                             let mut lock = game_state_rw.write().unwrap();
-                            lock.vote_running = false;
-                            lock.game_type = TANK(tgs);
-                            lock.client_list = client_list;
-                            lock.time = SystemTime::now();
+
+                            if tgs.red_score >= TANK_WIN_SCORE || tgs.blue_score >= TANK_WIN_SCORE {
+                                lock.vote_running = true;
+                                lock.try_conclude_vote();
+                                lock.time = SystemTime::now();
+                            }
+                            else {
+                                lock.vote_running = false;
+                                lock.game_type = TANK(tgs);
+                                lock.client_list = client_list;
+                                lock.time = SystemTime::now();
+                            }
+
                         } // at the end of the game loop where game mechanics run, we now move all the new data into the game state for the server.
                     }
                 }
