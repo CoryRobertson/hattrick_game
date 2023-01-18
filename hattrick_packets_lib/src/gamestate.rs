@@ -14,6 +14,7 @@ pub struct GameState {
     pub time: SystemTime,
     pub game_type: GameType,
     pub client_list: HashMap<String, ClientState>,
+    pub vote_running: bool,
 }
 
 impl Display for GameState {
@@ -33,6 +34,7 @@ impl Default for GameState {
             time: SystemTime::now(),
             game_type: PONG(PongGameState::default()),
             client_list: Default::default(),
+            vote_running: false,
         }
     }
 }

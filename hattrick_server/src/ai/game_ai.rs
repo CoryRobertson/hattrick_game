@@ -53,6 +53,7 @@ pub fn spawn_ai_thread(
                     d_key: false,
                     space_bar: false,
                 },
+                vote_number: 0,
             };
             let pcs: PongClientState =
                 get_pong_state_for_ai(&team_id, &local_gs, &mut client_packet, &previous_pcs); // use an ai function to make this pong client state
@@ -70,6 +71,7 @@ pub fn spawn_ai_thread(
                 pong_client_state: pcs, // use modified pong client state
                 tank_client_state: tcs, // use modified tank client state
                 team_id: client_packet.team_id,
+                vote_number: client_packet.vote_number,
             };
 
             {

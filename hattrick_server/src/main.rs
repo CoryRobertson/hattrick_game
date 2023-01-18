@@ -4,7 +4,10 @@ use hattrick_packets_lib::clientstate::ClientState;
 use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
-use hattrick_packets_lib::pong::{get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED, PONG_PADDLE_WIDTH, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y, POWER_HIT_COOLDOWN};
+use hattrick_packets_lib::pong::{
+    get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
+    PONG_PADDLE_WIDTH, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y,
+};
 use hattrick_packets_lib::tank::{
     respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX,
     TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED,
@@ -35,6 +38,7 @@ fn main() {
     let ai_running = Arc::new(Mutex::new(true));
     let mut client_threads: Vec<JoinHandle<()>> = vec![];
     // game_state_rwl.write().unwrap().game_type = TANK(TankGameState::default());
+    game_state_rwl.write().unwrap().vote_running = true;
 
     // A connection handling thread for receiving new clients.
     let connect_game_state = game_state_rwl.clone();
@@ -330,6 +334,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
 
                     pong_client_state: Default::default(),
                     tank_client_state: Default::default(),
+                    vote_number: 0,
                 },
             );
         } // block to add new client to client list with all default data.
@@ -420,7 +425,9 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                 // variable to update power hit time before we move the key state somewhere else,
                                 // power hit time is either updated to now or the previous depending on if the client is pressing space
                                 let update_power_hit_time = {
-                                    if c.key_state.space_bar && time_since_last_power_hit >= POWER_HIT_COOLDOWN {
+                                    if c.key_state.space_bar
+                                        && time_since_last_power_hit >= POWER_HIT_COOLDOWN
+                                    {
                                         SystemTime::now()
                                     } else {
                                         prev_client.pong_client_state.time_of_power_hit
@@ -440,6 +447,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                         time_of_power_hit: update_power_hit_time,
                                     },
                                     tank_client_state: prev_client.tank_client_state,
+                                    vote_number: c.vote_number,
                                 };
 
                                 {
@@ -456,6 +464,7 @@ fn handle_client(stream: TcpStream, game_state_rw: GameStateRW) -> JoinHandle<()
                                     key_state: c.key_state.clone(),
                                     pong_client_state: prev_client.pong_client_state,
                                     tank_client_state: prev_client.tank_client_state,
+                                    vote_number: c.vote_number,
                                 };
 
                                 {

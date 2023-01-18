@@ -6,9 +6,7 @@ use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_P
 use hattrick_packets_lib::tank::{TANK_BULLET_RADIUS, TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::{
-    get_angle_of_travel_degrees, round_number, two_point_angle, GAME_HEIGHT, GAME_WIDTH,
-};
+use hattrick_packets_lib::{get_angle_of_travel_degrees, round_number, two_point_angle, GAME_HEIGHT, GAME_WIDTH, get_vote_count_for_number};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -125,12 +123,9 @@ async fn main() {
 
                 // get the new game state that was most recently received from the connection thread
                 let local_gs = { game_state.lock().unwrap().clone() };
-
                 // game type independent code
                 {
-                    let ping = SystemTime::now()
-                        .duration_since(local_gs.clone().time)
-                        .unwrap(); // time from last game state to now, including game framerate added, making this number rather high on average.
+                    let ping = SystemTime::now().duration_since(local_gs.time).unwrap(); // time from last game state to now, including game framerate added, making this number rather high on average.
                     let ping_color = {
                         if ping.as_millis() > 16 {
                             RED
@@ -149,6 +144,35 @@ async fn main() {
                         );
                     } else {
                         local_state = LocalState::LostConnection;
+                    }
+
+                    if local_gs.vote_running {
+                        draw_text(
+                            &format!("Vote Running {}", get_vote_count_for_number(2,&local_gs)),
+                            50.0,
+                            50.0,
+                            16.0,
+                            BLACK,
+                        );
+
+                        local_gs
+                            .client_list
+                            .iter()
+                            .filter(|client| client.1.vote_number != 0)
+                            .enumerate()
+                            .for_each(|(index, (_, client))| {
+                                let y = 60 + (index * 10);
+                                draw_text(
+                                    &format!(
+                                        "c:{}",
+                                        client.vote_number
+                                    ),
+                                    50.0,
+                                    y as f32,
+                                    16.0,
+                                    BLACK,
+                                );
+                            });
                     }
                 }
 
@@ -218,11 +242,17 @@ async fn main() {
                         }
 
                         #[cfg(debug_assertions)]
-                        draw_text(&format!("DEBUG: {}, {}",pgs.ball_xvel,pgs.ball_yvel),pgs.ball_x + 20.0,pgs.ball_y,18.0,BLACK);
+                        draw_text(
+                            &format!("DEBUG: {}, {}", pgs.ball_xvel, pgs.ball_yvel),
+                            pgs.ball_x + 20.0,
+                            pgs.ball_y,
+                            18.0,
+                            BLACK,
+                        );
                         draw_circle(pgs.ball_x, pgs.ball_y, PONG_BALL_RADIUS, BLACK);
 
                         #[cfg(debug_assertions)]
-                        draw_circle(pgs.ball_x +(pgs.ball_xvel * 5.0),pgs.ball_y,5.0,BLACK);
+                        draw_circle(pgs.ball_x + (pgs.ball_xvel * 5.0), pgs.ball_y, 5.0, BLACK);
                         draw_poly(
                             pgs.ball_x,
                             pgs.ball_y,
@@ -388,6 +418,7 @@ fn spawn_connect_thread(
         let _ = stream.set_write_timeout(Option::from(Duration::from_secs(5)));
         let mut _local_gs: Option<GameState> = None;
         println!("connected");
+        let mut vote_num: u8 = 0;
         loop {
             let mut buf: [u8; 8192] = [0; 8192];
 
@@ -396,6 +427,22 @@ fn spawn_connect_thread(
                 mouse_pos: mouse_position(),
                 team_id: team_id.clone(),
                 key_state: KeyState::new(),
+                vote_number: {
+                    match &_local_gs {
+                        None => vote_num,
+                        Some(gs) => {
+                            if gs.vote_running {
+                                if is_key_released(KeyCode::Left) {
+                                    vote_num = (vote_num as i32 - 1).clamp(0, 255) as u8;
+                                }
+                                if is_key_released(KeyCode::Right) {
+                                    vote_num = (vote_num as i32 + 1).clamp(0, 255) as u8;
+                                }
+                            }
+                            vote_num
+                        }
+                    }
+                },
             };
 
             let ser = serde_json::to_string(&client_packet).unwrap();

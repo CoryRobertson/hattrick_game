@@ -1,3 +1,4 @@
+use crate::gamestate::GameState;
 use std::ops::Deref;
 
 pub mod clientinfo;
@@ -39,6 +40,24 @@ impl Magnitude for (f32, f32) {
 pub fn round_number(num: &f32, digits: u32) -> f32 {
     let multiple = 10.0_f32.powi(digits as i32);
     (num * multiple).round() / multiple
+}
+
+pub fn get_vote_count_for_number(number: u8, game_state: &GameState) -> u32 {
+    // TODO: could eventually make this run for every number, but for now I dont think I need this.
+    let count = game_state
+        .client_list
+        .iter()
+        .map(|(_, client)| client.vote_number) // map each client to their vote number, that all we care about
+        .fold(0, |count, vote_number| {
+            // here we reduce the iter to the count respective to that number.
+            if vote_number == number {
+                count + 1 // if the vote number is the number we are looking for, then add the count
+            } else {
+                count // if not, then dont increment the count.
+            }
+        });
+
+    count
 }
 
 /// Subtract two vectors and return a new vector that would be A pointing towards B.

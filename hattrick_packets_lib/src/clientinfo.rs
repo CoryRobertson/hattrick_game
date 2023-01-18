@@ -13,6 +13,7 @@ pub struct ClientInfo {
     pub mouse_pos: (f32, f32),
     pub team_id: Team,
     pub key_state: KeyState,
+    pub vote_number: u8,
 }
 
 /// Probably shouldn't ever use a default client info, unless the deserialization fails?
@@ -23,6 +24,7 @@ impl Default for ClientInfo {
             mouse_pos: (0.0, 0.0),
             team_id: BlueTeam,
             key_state: KeyState::default(),
+            vote_number: 0,
         }
     }
 }

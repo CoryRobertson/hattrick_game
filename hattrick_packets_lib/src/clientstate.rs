@@ -17,6 +17,7 @@ pub struct ClientState {
     pub key_state: KeyState,
     pub pong_client_state: PongClientState,
     pub tank_client_state: TankClientState,
+    pub vote_number: u8,
 }
 
 impl ClientState {
@@ -55,6 +56,7 @@ impl Default for ClientState {
             key_state: KeyState::default(),
             pong_client_state: Default::default(),
             tank_client_state: TankClientState::default(),
+            vote_number: 0,
         }
     }
 }

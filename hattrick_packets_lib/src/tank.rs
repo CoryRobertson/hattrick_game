@@ -82,12 +82,12 @@ impl TankBullet {
 impl Default for TankClientState {
     fn default() -> Self {
         TankClientState {
-            rotation: 0.0,
-            tank_x: 0.0,
-            tank_y: 0.0,
+            rotation: rand::thread_rng().gen_range(0.0..360.0),
+            tank_x: rand::thread_rng().gen_range(0.0..GAME_WIDTH),
+            tank_y: rand::thread_rng().gen_range(0.0..GAME_HEIGHT),
             tank_x_vel: 0.0,
             tank_y_vel: 0.0,
-            last_shot_time: SystemTime::now(),
+            last_shot_time: UNIX_EPOCH,
         }
     }
 }
@@ -100,7 +100,8 @@ pub fn respawn_tank(
 ) {
     let position: (f32, f32, f32) = (0..10) // generate 10 random positions to potentially respawn the player
         .into_iter()
-        .map(|_| { // map with _ because we dont care about the individual numbers.
+        .map(|_| {
+            // map with _ because we dont care about the individual numbers.
             // rand x and y values
             let rx = rand::thread_rng().gen_range(0.0..GAME_WIDTH);
             let ry = rand::thread_rng().gen_range(0.0..GAME_HEIGHT);
@@ -108,10 +109,11 @@ pub fn respawn_tank(
             // from those random x and y values, generate the distance to the closest tank in the game
             let closest_tank_dist = _clients
                 .iter()
-                .map(|(_, clientstate)| { // map only each client state, as we dont care  about their uuid s
+                .map(|(_, client_state)| {
+                    // map only each client state, as we dont care  about their uuid s
                     distance(
-                        clientstate.tank_client_state.tank_x,
-                        clientstate.tank_client_state.tank_y,
+                        client_state.tank_client_state.tank_x,
+                        client_state.tank_client_state.tank_y,
                         rx,
                         ry,
                     ) // map the distance from the random x and y to the every given tank x and y
