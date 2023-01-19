@@ -80,7 +80,7 @@ impl GameState {
                                 game_type,
                             )
                         })
-                        .fold((0,PONG(PongGameState::default())),|acc, new_game| {
+                        .fold((0, PONG(PongGameState::default())), |acc, new_game| {
                             if new_game.0 > acc.0 {
                                 new_game // if new game vote count is higher than acc vote count, return the new game vote count
                             } else {

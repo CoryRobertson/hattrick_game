@@ -86,9 +86,20 @@ pub fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     (g1 + g2).sqrt()
 }
 
+/// Returns the distance between two points
+pub fn point_distance(point1: (f32, f32), point2: (f32, f32)) -> f32 {
+    let g1 = (point2.0 - point1.0).powi(2);
+    let g2 = (point2.1 - point1.1).powi(2);
+    (g1 + g2).sqrt()
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{distance, round_number, two_point_angle};
+    use std::time::SystemTime;
+    use crate::{distance, get_vote_count_for_number, round_number, two_point_angle};
+    use crate::clientstate::ClientState;
+    use crate::gamestate::GameState;
+    use crate::team::Team;
 
     #[test]
     fn round_num_test() {
@@ -157,5 +168,50 @@ mod tests {
         let point2 = (0.0, 0.0);
         let point1 = (-1.0, 0.0);
         assert_eq!(two_point_angle(point1, point2), 180.0 - 180.0);
+    }
+
+    #[test]
+    fn get_vote_count_test() {
+        let mut gs = GameState::default();
+        gs.client_list.insert(
+            "test1".to_string(),
+            ClientState {
+                time: SystemTime::now(),
+                team_id: Team::RedTeam,
+                mouse_pos: (0.0, 0.0),
+                key_state: Default::default(),
+                pong_client_state: Default::default(),
+                tank_client_state: Default::default(),
+                vote_number: 1,
+            },
+        );
+        gs.client_list.insert(
+            "test2".to_string(),
+            ClientState {
+                time: SystemTime::now(),
+                team_id: Team::RedTeam,
+                mouse_pos: (0.0, 0.0),
+                key_state: Default::default(),
+                pong_client_state: Default::default(),
+                tank_client_state: Default::default(),
+                vote_number: 2,
+            },
+        );
+        gs.client_list.insert(
+            "test3".to_string(),
+            ClientState {
+                time: SystemTime::now(),
+                team_id: Team::RedTeam,
+                mouse_pos: (0.0, 0.0),
+                key_state: Default::default(),
+                pong_client_state: Default::default(),
+                tank_client_state: Default::default(),
+                vote_number: 1,
+            },
+        );
+        let vote_count_one = get_vote_count_for_number(1, &gs);
+        let vote_count_two = get_vote_count_for_number(2, &gs);
+        assert_eq!(vote_count_one, 2);
+        assert_eq!(vote_count_two, 1);
     }
 }
