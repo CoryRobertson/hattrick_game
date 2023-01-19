@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  web:
+    image: "hattrick_server:latest"
+    container_name: "hattrick_server"
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8111:8111"
