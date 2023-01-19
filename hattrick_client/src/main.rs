@@ -1,5 +1,5 @@
 use hattrick_packets_lib::clientinfo::ClientInfo;
-use hattrick_packets_lib::gamestate::GameState;
+use hattrick_packets_lib::gamestate::{GameState, MAX_VOTE_NUM};
 use hattrick_packets_lib::gametypes::GameType;
 use hattrick_packets_lib::keystate::KeyState;
 use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_PADDLE_HEIGHT};
@@ -455,11 +455,11 @@ fn spawn_connect_thread(
                         None => vote_num,
                         Some(gs) => {
                             if gs.vote_running {
-                                if is_key_released(KeyCode::Left) {
-                                    vote_num = (vote_num as i32 - 1).clamp(0, 255) as u8;
+                                if is_key_pressed(KeyCode::Left) {
+                                    vote_num = (vote_num as i32 - 1).clamp(0, MAX_VOTE_NUM) as u8;
                                 }
-                                if is_key_released(KeyCode::Right) {
-                                    vote_num = (vote_num as i32 + 1).clamp(0, 255) as u8;
+                                if is_key_pressed(KeyCode::Right) {
+                                    vote_num = (vote_num as i32 + 1).clamp(0, MAX_VOTE_NUM) as u8;
                                 }
                             } else {
                                 vote_num = 0;

@@ -10,6 +10,7 @@ use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 
 pub static VOTE_TIME: f32 = 10.0;
+pub static MAX_VOTE_NUM: i32 = 2;
 
 /// GameState holds the game type, system time, and list of players. This is the single struct that is sent to each client every frame of gameplay.
 /// Examples of things that go in GameState are things that need to be known by literally all clients, and the server, at the same time for gameplay to work properly.
