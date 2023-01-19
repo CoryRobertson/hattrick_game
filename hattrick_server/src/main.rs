@@ -1,11 +1,19 @@
 use crate::ai::game_ai::spawn_ai_thread;
 use hattrick_packets_lib::clientinfo::ClientInfo;
 use hattrick_packets_lib::clientstate::ClientState;
-use hattrick_packets_lib::gamestate::{GameState};
+use hattrick_packets_lib::gamestate::GameState;
 use hattrick_packets_lib::gametypes::GameType::{PONG, TANK};
 use hattrick_packets_lib::keystate::KeyState;
-use hattrick_packets_lib::pong::{get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED, PONG_PADDLE_WIDTH, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME, RED_TEAM_PADDLE_Y, PONG_POINTS_TO_WIN};
-use hattrick_packets_lib::tank::{respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_BOUNCE_COUNT_MAX, TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH, TANK_WIN_SCORE};
+use hattrick_packets_lib::pong::{
+    get_pong_paddle_width, PongClientState, BLUE_TEAM_PADDLE_Y, PADDLE_MOVE_SPEED,
+    PONG_PADDLE_WIDTH, PONG_POINTS_TO_WIN, POWER_HIT_COOLDOWN, POWER_HIT_LOCK_TIME,
+    RED_TEAM_PADDLE_Y,
+};
+use hattrick_packets_lib::tank::{
+    respawn_tank, TankBullet, TankGameState, TANK_ACCEL, TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY,
+    TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
+    TANK_WIN_SCORE,
+};
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;
 use hattrick_packets_lib::{distance, round_digits, two_point_angle, GAME_WIDTH};
@@ -122,7 +130,9 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                         {
                             let mut lock = game_state_rw.write().unwrap();
                             lock.time = SystemTime::now();
-                            if pgs.blue_points >= PONG_POINTS_TO_WIN || pgs.red_points >= PONG_POINTS_TO_WIN {
+                            if pgs.blue_points >= PONG_POINTS_TO_WIN
+                                || pgs.red_points >= PONG_POINTS_TO_WIN
+                            {
                                 lock.vote_running = true;
                                 lock.try_conclude_vote();
                             } else {
@@ -130,7 +140,6 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 lock.game_type = PONG(pgs);
                                 lock.time = SystemTime::now();
                             }
-
                         } // at the end of the game loop for pong, we add all the new data into the game state.
                     }
 
@@ -168,12 +177,16 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 client.1.tank_client_state.rotation -= TANK_TURN_SPEED * difference;
                             }
                             if client_key_state.w_key && current_speed < TANK_MAX_SPEED {
-                                client.1.tank_client_state.tank_x_vel += TANK_ACCEL * difference;
-                                client.1.tank_client_state.tank_y_vel += TANK_ACCEL * difference;
+                                client.1.tank_client_state.tank_x_vel +=
+                                    (TANK_ACCEL * x_ratio) * difference;
+                                client.1.tank_client_state.tank_y_vel +=
+                                    (TANK_ACCEL * y_ratio) * difference;
                             }
                             if client_key_state.s_key && -current_speed > -TANK_MAX_SPEED {
-                                client.1.tank_client_state.tank_x_vel -= TANK_ACCEL * difference;
-                                client.1.tank_client_state.tank_y_vel -= TANK_ACCEL * difference;
+                                client.1.tank_client_state.tank_x_vel -=
+                                    (TANK_ACCEL * x_ratio) * difference;
+                                client.1.tank_client_state.tank_y_vel -=
+                                    (TANK_ACCEL * y_ratio) * difference;
                             }
 
                             let last_shot_diff = SystemTime::now()
@@ -239,9 +252,9 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             } // if velocity is very small, make it 0 so there is no slow drifting for tanks.
 
                             client.1.tank_client_state.tank_x +=
-                                (client.1.tank_client_state.tank_x_vel * difference) * x_ratio;
+                                client.1.tank_client_state.tank_x_vel * difference;
                             client.1.tank_client_state.tank_y +=
-                                (client.1.tank_client_state.tank_y_vel * difference) * y_ratio;
+                                client.1.tank_client_state.tank_y_vel * difference;
 
                             round_digits(&mut client.1.tank_client_state.tank_x_vel, 4);
                             round_digits(&mut client.1.tank_client_state.tank_y_vel, 4);
@@ -253,13 +266,7 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                             bullet.step(&difference);
                         } // do physics for bullets
 
-                        for index in 0..tgs.bullets.len() {
-                            if let Some(bullet) = tgs.bullets.get(index) {
-                                if bullet.bounce_count >= TANK_BULLET_BOUNCE_COUNT_MAX {
-                                    tgs.bullets.remove(index);
-                                }
-                            }
-                        } // remove all bullets that have more than the maximum allowed bounces for bullets.
+                        tgs.remove_dead_bullets(); // remove all dead bullets from the game state
 
                         // bad practice cloning happening here.
                         let copy_client_list = client_list.clone();
@@ -301,14 +308,12 @@ fn spawn_game_thread(game_state_rw: GameStateRW) -> JoinHandle<()> {
                                 lock.vote_running = true;
                                 lock.try_conclude_vote();
                                 lock.time = SystemTime::now();
-                            }
-                            else {
+                            } else {
                                 lock.vote_running = false;
                                 lock.game_type = TANK(tgs);
                                 lock.client_list = client_list;
                                 lock.time = SystemTime::now();
                             }
-
                         } // at the end of the game loop where game mechanics run, we now move all the new data into the game state for the server.
                     }
                 }

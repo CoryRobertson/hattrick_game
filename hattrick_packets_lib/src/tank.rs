@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub static TANK_MAX_SPEED: f32 = 60.0;
 pub static TANK_ACCEL: f32 = 500.0;
 pub static TANK_TURN_SPEED: f32 = 45.0;
-pub static TANK_FRICTION: f32 = 0.99;
+pub static TANK_FRICTION: f32 = 0.96;
 
 pub static TANK_WIN_SCORE: i32 = 10;
 
@@ -94,10 +94,23 @@ impl Default for TankClientState {
     }
 }
 
+impl TankGameState {
+    /// Removes all bullets in the game state that have >= the bounce limit each
+    pub fn remove_dead_bullets(&mut self) {
+        for index in 0..self.bullets.len() {
+            if let Some(bullet) = self.bullets.get(index) {
+                if bullet.bounce_count >= TANK_BULLET_BOUNCE_COUNT_MAX {
+                    self.bullets.remove(index);
+                }
+            }
+        }
+    }
+}
+
 /// respawn_tank takes in a mutable TankClientState, and
 pub fn respawn_tank(
     tank_client_state: &mut TankClientState,
-    _bullets: &Vec<TankBullet>,
+    _bullets: &[TankBullet],
     _clients: &HashMap<String, ClientState>,
 ) {
     let position: (f32, f32, f32) = (0..10) // generate 10 random positions to potentially respawn the player

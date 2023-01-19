@@ -37,12 +37,9 @@ pub fn spawn_ai_thread(
         loop {
             // Do ai logic on one of these three lines
             _previous_tcs = match &game_state.read().unwrap().client_list.get(&name) {
-                None => { _previous_tcs.clone() }
-                Some(client) => {
-                    client.tank_client_state.clone()
-                }
+                None => _previous_tcs.clone(),
+                Some(client) => client.tank_client_state.clone(),
             };
-
 
             let mut client_packet = ClientInfo {
                 time: SystemTime::now(),

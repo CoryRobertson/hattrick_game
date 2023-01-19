@@ -6,7 +6,10 @@ use hattrick_packets_lib::pong::{get_pong_paddle_width, PONG_BALL_RADIUS, PONG_P
 use hattrick_packets_lib::tank::{TANK_BULLET_RADIUS, TANK_HEIGHT, TANK_WIDTH};
 use hattrick_packets_lib::team::Team;
 use hattrick_packets_lib::team::Team::{BlueTeam, RedTeam};
-use hattrick_packets_lib::{get_angle_of_travel_degrees, round_number, two_point_angle, GAME_HEIGHT, GAME_WIDTH, get_vote_count_for_number};
+use hattrick_packets_lib::{
+    get_angle_of_travel_degrees, get_vote_count_for_number, round_number, two_point_angle,
+    GAME_HEIGHT, GAME_WIDTH,
+};
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::io::{Read, Write};
@@ -148,7 +151,7 @@ async fn main() {
 
                     if local_gs.vote_running {
                         draw_text(
-                            &format!("Vote Running {}", get_vote_count_for_number(2,&local_gs)),
+                            &format!("Vote Running {}", get_vote_count_for_number(2, &local_gs)),
                             50.0,
                             50.0,
                             16.0,
@@ -163,10 +166,7 @@ async fn main() {
                             .for_each(|(index, (_, client))| {
                                 let y = 60 + (index * 10);
                                 draw_text(
-                                    &format!(
-                                        "c:{}",
-                                        client.vote_number
-                                    ),
+                                    &format!("client vote:{}", client.vote_number),
                                     50.0,
                                     y as f32,
                                     16.0,
@@ -299,7 +299,16 @@ async fn main() {
                                 }
                             };
 
-                            draw_text(&format!("Red Score: {} Blue Score: {}", tgs.red_score, tgs.blue_score), 30.0, 40.0, 18.0, BLACK);
+                            draw_text(
+                                &format!(
+                                    "Red Score: {} Blue Score: {}",
+                                    tgs.red_score, tgs.blue_score
+                                ),
+                                30.0,
+                                40.0,
+                                18.0,
+                                BLACK,
+                            );
 
                             // debug info for each tank
                             #[cfg(debug_assertions)]
@@ -336,6 +345,18 @@ async fn main() {
                                 mouse_angle,
                                 GREEN,
                             );
+                            let dir_of_travel = {
+                                let angle = client.1.tank_client_state.rotation.to_radians();
+                                // println!("{}", angle);
+                                (angle.cos() * 15.0, angle.sin() * 15.0)
+                            }; // get the direction of travel
+
+                            draw_circle(
+                                dir_of_travel.0 + cx + (TANK_WIDTH / 2.0),
+                                dir_of_travel.1 + cy + (TANK_HEIGHT / 2.0),
+                                4.0,
+                                BLACK,
+                            ); // draw the direction of travel bubble on the tanks
                         } // render all clients
 
                         for bullet in &tgs.bullets {
