@@ -95,11 +95,11 @@ pub fn point_distance(point1: (f32, f32), point2: (f32, f32)) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-    use crate::{distance, get_vote_count_for_number, round_number, two_point_angle};
     use crate::clientstate::ClientState;
     use crate::gamestate::GameState;
     use crate::team::Team;
+    use crate::{distance, get_vote_count_for_number, round_number, two_point_angle};
+    use std::time::SystemTime;
 
     #[test]
     fn round_num_test() {

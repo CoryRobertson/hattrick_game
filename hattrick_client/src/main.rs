@@ -243,7 +243,10 @@ async fn main() {
 
                         #[cfg(debug_assertions)]
                         draw_text(
-                            &format!("DEBUG: {}, {}", pgs.ball_xvel, pgs.ball_yvel),
+                            &format!(
+                                "DEBUG: {}, {}, {:?}",
+                                pgs.ball_xvel, pgs.ball_yvel, pgs.ball_last_team_hit
+                            ),
                             pgs.ball_x + 20.0,
                             pgs.ball_y,
                             18.0,

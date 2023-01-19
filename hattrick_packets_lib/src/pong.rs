@@ -31,6 +31,7 @@ pub struct PongGameState {
     pub ball_yvel: f32,
     pub red_points: i32,
     pub blue_points: i32,
+    pub ball_last_team_hit: Team,
 }
 
 //TODO: probably replace PONG_BALL_VEL_ADD_MAX and PONG_BALL_VEL_ADD_MIN with functions that take in current velocity, so we can cap the velocity?
@@ -77,6 +78,7 @@ impl Default for PongGameState {
             ball_yvel: 5.0,
             red_points: 0,
             blue_points: 0,
+            ball_last_team_hit: BlueTeam,
         }
     }
 }
@@ -116,6 +118,7 @@ impl PongGameState {
                 self.ball_yvel = -default_yvel;
                 self.blue_points += 1;
                 self.ball_y = GAME_HEIGHT - ball_radius;
+                self.ball_last_team_hit = RedTeam;
                 #[cfg(debug_assertions)]
                 println!(
                     "blue points scored with ball xvel: {} and ball yvel: {}",
@@ -136,6 +139,7 @@ impl PongGameState {
                 };
                 self.ball_yvel = default_yvel;
                 self.red_points += 1;
+                self.ball_last_team_hit = BlueTeam;
                 self.ball_y = 0.0 + ball_radius;
                 #[cfg(debug_assertions)]
                 println!(
@@ -165,7 +169,8 @@ impl PongGameState {
             let cw = get_pong_paddle_width(client_list, &cs.team_id); // client width
             let ch = PONG_PADDLE_HEIGHT; // client height
 
-            if (self.ball_y > cy && self.ball_y < cy + ch)
+            if (self.ball_last_team_hit != cs.team_id)
+                && (self.ball_y > cy && self.ball_y < cy + ch)
                 && (self.ball_x > cx && self.ball_x < cx + cw)
             {
                 // first expression is height check for bouncing, second expression is lefty and righty check for bouncing
@@ -212,6 +217,8 @@ impl PongGameState {
                 } else {
                     self.ball_yvel -= rand_yvel_change;
                 }
+
+                self.ball_last_team_hit = cs.team_id.clone(); // set the last ball team hit to this clients team id, making it so multi hits on the same paddle can't occur.
 
                 #[cfg(debug_assertions)]
                 println!(
