@@ -10,9 +10,8 @@ use hattrick_packets_lib::pong::{
     RED_TEAM_PADDLE_Y,
 };
 use hattrick_packets_lib::tank::{
-    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY,
-    TANK_FRICTION, TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH,
-    TANK_WIN_SCORE,
+    respawn_tank, TankBullet, TANK_ACCEL, TANK_BULLET_RADIUS, TANK_BULLET_VELOCITY, TANK_FRICTION,
+    TANK_HEIGHT, TANK_MAX_SPEED, TANK_SHOT_COOL_DOWN, TANK_TURN_SPEED, TANK_WIDTH, TANK_WIN_SCORE,
 };
 use hattrick_packets_lib::team::Team::BlueTeam;
 use hattrick_packets_lib::team::Team::RedTeam;

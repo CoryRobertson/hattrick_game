@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run client and server" type="CompoundRunConfigurationType">
+    <toRun name="Run client" type="CargoCommandRunConfiguration" />
+    <toRun name="Run server" type="CargoCommandRunConfiguration" />
+    <method v="2" />
+  </configuration>
+</component>

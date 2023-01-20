@@ -1,4 +1,3 @@
-use macroquad::prelude::KeyCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -12,15 +11,21 @@ pub struct KeyState {
     pub space_bar: bool,
 }
 
-impl KeyState {
-    /// new() by default returns a key state with all inputs checked from the keyboard.
-    pub fn new() -> KeyState {
-        KeyState {
-            w_key: macroquad::prelude::is_key_down(KeyCode::W),
-            a_key: macroquad::prelude::is_key_down(KeyCode::A),
-            s_key: macroquad::prelude::is_key_down(KeyCode::S),
-            d_key: macroquad::prelude::is_key_down(KeyCode::D),
-            space_bar: macroquad::prelude::is_key_down(KeyCode::Space),
+#[cfg(feature = "client")]
+pub mod client {
+    use crate::keystate::KeyState;
+    use macroquad::prelude::KeyCode;
+
+    impl KeyState {
+        /// new() by default returns a key state with all inputs checked from the keyboard.
+        pub fn new() -> KeyState {
+            KeyState {
+                w_key: macroquad::prelude::is_key_down(KeyCode::W),
+                a_key: macroquad::prelude::is_key_down(KeyCode::A),
+                s_key: macroquad::prelude::is_key_down(KeyCode::S),
+                d_key: macroquad::prelude::is_key_down(KeyCode::D),
+                space_bar: macroquad::prelude::is_key_down(KeyCode::Space),
+            }
         }
     }
 }
